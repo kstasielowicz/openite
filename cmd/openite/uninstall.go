@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -29,6 +28,15 @@ var (
 	reInno = regexp.MustCompile(`(?i)unins\d{3}\.exe`)
 	reNSIS = regexp.MustCompile(`(?i)(^|[\\/"])(uninst|uninstall|uninstaller)[^\\/"]*\.exe`)
 )
+
+// winDir is filepath.Dir for Windows paths. It must not depend on the OS we run on: registry paths always use
+// backslashes, and filepath.Dir on Linux (where CI also runs the tests) would not split them.
+func winDir(p string) string {
+	if i := strings.LastIndexAny(p, `\/`); i > 0 {
+		return p[:i]
+	}
+	return "."
+}
 
 // exePathOf splits `"C:\Program Files\App\uninst.exe" /arg` into the exe path and the rest.
 func exePathOf(cmd string) (exe, rest string) {
@@ -66,7 +74,7 @@ func silentUninstallCmd(e arpEntry) (cmdline string, nsisExe string, ok bool) {
 		// NSIS uninstallers copy themselves to %TEMP% and return at once, so we'd report "done" while it is still
 		// running. "_?=<dir>" makes it run in place and wait (it must be the last argument, unquoted).
 		exe, _ := exePathOf(u)
-		return fmt.Sprintf(`"%s" /S _?=%s`, exe, filepath.Dir(exe)), exe, true
+		return fmt.Sprintf(`"%s" /S _?=%s`, exe, winDir(exe)), exe, true
 	}
 	return "", "", false
 }
@@ -105,7 +113,7 @@ func smartUninstall(s Step, b Backend) (int, string) {
 			rc, out := runRawCmdline(cmdline, uninstallTimeout)
 			if rc == 0 && nsisExe != "" { // tidy the in-place NSIS uninstaller left behind
 				os.Remove(nsisExe)
-				os.Remove(filepath.Dir(nsisExe))
+				os.Remove(winDir(nsisExe))
 			}
 			return rc, strings.Join(append(log, out), "\n")
 		}
