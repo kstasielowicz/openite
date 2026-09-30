@@ -1,0 +1,18 @@
+# Bare-metal / VM install without Docker:
+#   sudo cp -r openite /opt/openite && sudo useradd -r openite && sudo mkdir /var/lib/openite && sudo chown openite /var/lib/openite
+#   sudo cp deploy/openite-server.service /etc/systemd/system/ && sudo systemctl enable --now openite-server
+[Unit]
+Description=Openite server
+After=network-online.target
+
+[Service]
+User=openite
+Environment=OPENITE_DB=/var/lib/openite/openite.db
+ExecStart=/usr/bin/python3 /opt/openite/server/server.py --host 0.0.0.0 --port 8080
+Restart=always
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/openite
+
+[Install]
+WantedBy=multi-user.target
