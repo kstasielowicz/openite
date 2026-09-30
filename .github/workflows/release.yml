@@ -49,7 +49,7 @@ jobs:
       - name: Checksums
         working-directory: dist
         run: sha256sum openite-* > SHA256SUMS && cat SHA256SUMS
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@v4
         with: {subject-path: "dist/openite-*"}
       - name: Create release
         env:
