@@ -1,0 +1,6 @@
+dist/
+openite.db*
+*.db
+__pycache__/
+.git/
+.vscode/

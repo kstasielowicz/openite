@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Openite</title>
+<style>
+:root{--bg:#f3f5f9;--card:#fff;--fg:#182033;--mute:#6b7488;--line:#e2e6ee;--acc:#3b6cf6;--acc2:#7c5cf6;--ok:#12a150;--bad:#d92d3a;--warn:#c77700;--sh:0 1px 2px #1b25390d,0 4px 14px #1b25390a}
+@media(prefers-color-scheme:dark){:root{--bg:#0f131b;--card:#181e2a;--fg:#e8ebf3;--mute:#8b94a8;--line:#273042;--acc:#6b93ff;--acc2:#9b82ff;--ok:#3ddc97;--bad:#ff7a85;--warn:#ffc04d;--sh:0 1px 2px #0006,0 6px 20px #0004}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;gap:14px;align-items:center;padding:10px 24px;background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;letter-spacing:-.01em}
+.logo i{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;color:#fff;font-style:normal;font-size:15px}
+nav{display:flex;gap:2px;flex:1;flex-wrap:wrap;margin-left:10px}
+nav button{background:none;border:0;padding:7px 13px;border-radius:8px;color:var(--mute);cursor:pointer;font:inherit;font-weight:500}
+nav button:hover{color:var(--fg);background:var(--bg)}nav button.on{background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc)}
+nav .sep{width:1px;background:var(--line);margin:6px 8px}
+main{max-width:1040px;margin:24px auto 40px;padding:0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--sh)}
+button.b{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:0;border-radius:9px;padding:8px 16px;cursor:pointer;font:inherit;font-weight:600;transition:transform .08s,filter .15s}
+button.b:hover:not(:disabled){filter:brightness(1.08)}button.b:active:not(:disabled){transform:scale(.98)}
+button.b.sec{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:500}button.b.sec:hover:not(:disabled){border-color:var(--acc);filter:none}
+button.b.big{padding:11px 26px;font-size:16px;border-radius:11px}
+button:disabled{opacity:.4;cursor:default}
+input,select,textarea{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:7px 11px;max-width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--acc) 45%,transparent);border-color:var(--acc)}
+textarea{width:100%;min-height:120px;font-family:ui-monospace,Consolas,monospace}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.grow{flex:1}
+.mute{color:var(--mute)}.dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--mute);flex:none}.dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
+.hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 12%,var(--card)),color-mix(in srgb,var(--acc2) 10%,var(--card)));display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.hero h2{margin:0 0 2px;font-size:20px;letter-spacing:-.01em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:10px}
+.app{border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:11px 12px;display:flex;gap:11px;align-items:center;cursor:pointer;user-select:none;position:relative;transition:border-color .12s,transform .12s,box-shadow .12s}
+.app:hover{border-color:color-mix(in srgb,var(--acc) 50%,var(--line));transform:translateY(-1px);box-shadow:var(--sh)}
+.app.sel{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 9%,var(--card))}
+.app.sel::after{content:"✓";position:absolute;top:7px;right:9px;width:19px;height:19px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px;display:grid;place-items:center}
+.av{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:17px;flex:none}
+.app .nm{font-weight:600;line-height:1.2}.app .st{font-size:12px;margin-top:2px;min-height:16px}
+.tag{font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.tag.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}.tag.up{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}.tag.bad{color:var(--bad)}
+.chip{font:inherit;font-size:13px;padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap}
+.chip:hover{border-color:var(--acc)}.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.cats{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin}
+h2{margin:0 0 4px;font-size:18px}h3{margin:22px 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);display:flex;gap:8px;align-items:center}
+h3 span{font-weight:400;opacity:.7}
+pre{background:var(--bg);padding:12px;border-radius:9px;overflow:auto;max-height:340px;font-size:12px;white-space:pre-wrap;word-break:break-all;border:1px solid var(--line)}
+.bar{position:sticky;bottom:14px;background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(10px);border:1px solid color-mix(in srgb,var(--acc) 50%,var(--line));border-radius:16px;padding:13px 16px;box-shadow:0 10px 34px #0003;margin-top:18px}
+.st-done{color:var(--ok)}.st-failed,.st-halted{color:var(--bad)}.st-running{color:var(--warn)}
+.spin{width:12px;height:12px;border-radius:50%;border:2px solid var(--warn);border-top-color:transparent;display:inline-block;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:5px}@keyframes sp{to{transform:rotate(360deg)}}
+.err,.ok-msg{padding:10px 14px;border-radius:10px;margin-bottom:14px;font-weight:500}
+.err{background:color-mix(in srgb,var(--bad) 13%,var(--card));color:var(--bad)}.ok-msg{background:color-mix(in srgb,var(--ok) 13%,var(--card));color:var(--ok)}
+.steps{display:flex;gap:20px;flex-wrap:wrap;color:var(--mute);margin:8px 0 0}.steps b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px;margin-right:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
+code{background:var(--bg);padding:1px 6px;border-radius:5px;font-size:13px}
+@media(max-width:640px){header{padding:8px 12px}main{padding:0 12px}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const LS = {get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+            set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }};
+const S = {token: LS.get('tok'), email: LS.get('email'), home: false, lite: false, adv: LS.get('adv') === '1', tab: 'install',
+  devices: [], catalog: [], packs: [], scripts: [], profiles: [], assignments: [], jobs: [], audit: [],
+  selDevices: new Set(), selApps: new Set(), openJob: null, code: null, key: null, q: '', cat: 'All', msg: null, err: null, autoSel: false, rollout: true, ready: false};
+const BASIC = ['install', 'devices', 'activity'], ADV = ['profiles', 'scripts', 'automation', 'audit'];
+const LABEL = {install: 'Install apps', devices: 'Devices', activity: 'Activity', profiles: 'Profiles', scripts: 'Scripts', automation: 'Auto-sync', audit: 'Audit log'};
+
+function h(tag, attrs, ...kids) {   // text is always a text node: no HTML injection
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (k === 'class') e.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
+    else if (v === true) e.setAttribute(k, '');
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+async function api(method, path, body) {
+  const r = await fetch(path, {method, headers: {'Content-Type': 'application/json', ...(S.token ? {Authorization: 'Bearer ' + S.token} : {})},
+    body: method === 'GET' ? undefined : JSON.stringify(body || {})});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && S.token && !S.lite) { signOut(); throw new Error('Signed out'); }
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const ago = t => !t ? 'never' : (s => s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : Math.floor(s / 86400) + ' d ago')(Date.now() / 1000 - t);
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const allTags = () => [...new Set(S.devices.flatMap(d => d.tags))].sort();
+const hue = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+
+function signOut() { LS.set('tok', null); LS.set('email', null); S.token = null; render(); }
+function setSession(r) { S.token = r.token; S.email = r.email; S.home = !!r.home; LS.set('tok', r.token); LS.set('email', r.email); }
+
+async function load() {
+  const need = ['devices', 'catalog', 'packs', 'jobs', 'profiles', ...(S.adv && !S.lite ? ['scripts', 'assignments', 'audit'] : [])];
+  const res = await Promise.all(need.map(p => api('GET', '/api/' + p)));
+  need.forEach((p, i) => S[p] = res[i]);
+  S.selDevices = new Set([...S.selDevices].filter(id => S.devices.some(d => d.id === id)));
+  if (!S.autoSel && S.devices.length === 1) { S.selDevices.add(S.devices[0].id); S.autoSel = true; }  // nothing to choose with one device
+}
+async function act(fn, okMsg) {
+  try { S.err = null; S.msg = null; await fn(); if (okMsg) S.msg = okMsg; await load(); } catch (e) { S.err = e.message; }
+  render();
+}
+
+// ---------------------------------------------------------------- sign in
+function authView() {
+  const email = h('input', {type: 'email', placeholder: 'email', autocomplete: 'username'});
+  const pw = h('input', {type: 'password', placeholder: 'password (8+ characters)', autocomplete: 'current-password'});
+  const go = mode => async () => {
+    try { setSession(await api('POST', '/api/' + mode, {email: email.value, password: pw.value})); S.err = null; await load(); render(); }
+    catch (e) { S.err = e.message; render(); }
+  };
+  return h('main', {}, h('div', {class: 'card', style: 'max-width:400px;margin:70px auto'},
+    h('div', {class: 'logo', style: 'margin-bottom:10px'}, h('i', {}, '⬇'), 'Openite'), h('p', {class: 'mute'}, 'Sign in to manage software on all your devices.'),
+    S.err && h('div', {class: 'err'}, S.err), h('div', {class: 'row'}, email, pw),
+    h('div', {class: 'row', style: 'margin-top:14px'}, h('button', {class: 'b', onclick: go('login')}, 'Sign in'), h('button', {class: 'b sec', onclick: go('register')}, 'Create account'))));
+}
+
+// ---------------------------------------------------------------- install (main screen)
+function appStatus(a) {
+  const sel = S.devices.filter(d => S.selDevices.has(d.id));
+  if (!sel.length) return null;
+  const inst = sel.filter(d => d.have.includes(a.key)).length, up = sel.filter(d => d.outdated.includes(a.key)).length;
+  if (!inst) return null;
+  const where = sel.length > 1 ? ` on ${inst}/${sel.length}` : '';
+  return up ? h('span', {class: 'tag up'}, 'update available' + where) : h('span', {class: 'tag ok'}, '✔ installed' + where);
+}
+function startJob(steps, title, what) {
+  const ids = [...S.selDevices];
+  if (!ids.length) { S.err = 'Choose at least one device first.'; return render(); }
+  act(async () => {
+    const r = await api('POST', '/api/jobs', {device_ids: ids, steps, title, rollout: S.rollout && ids.length >= 4});
+    S.tab = 'activity';
+    S.msg = `${what} started` + (S.lite ? '.' : ` on ${plural(ids.length, 'device')}.`) + (r.batches ? ` Rolling out in stages (${r.batches.join(' → ')}); it stops automatically if the first ones fail.` : ' Progress shows below.');
+  });
+}
+function installView() {
+  const apps = [...S.selApps], q = S.q.toLowerCase();
+  const cats = [...new Set(S.catalog.map(a => a.category))].sort();
+  const selDevs = S.devices.filter(d => S.selDevices.has(d.id));
+  const cards = [];
+  const shown = a => (S.cat === 'All' || a.category === S.cat) && (!q || (a.name + ' ' + a.key).toLowerCase().includes(q));
+  const sections = cats.filter(c => S.cat === 'All' || c === S.cat).map(c => {
+    const list = S.catalog.filter(a => a.category === c);
+    return h('section', {}, h('h3', {}, c, h('span', {}, list.length)), h('div', {class: 'grid'}, list.map(a => {
+      const card = h('div', {class: 'app' + (S.selApps.has(a.key) ? ' sel' : ''), 'data-n': (a.name + ' ' + a.key).toLowerCase(), style: shown(a) ? '' : 'display:none',
+        onclick: () => { S.selApps.has(a.key) ? S.selApps.delete(a.key) : S.selApps.add(a.key); render(); }},
+        h('div', {class: 'av', style: `background:linear-gradient(135deg,hsl(${hue(a.key)} 70% 52%),hsl(${(hue(a.key) + 40) % 360} 70% 42%))`}, a.name[0].toUpperCase()),
+        h('div', {}, h('div', {class: 'nm'}, a.name, a.custom && h('span', {class: 'tag', style: 'margin-left:6px'}, 'custom')), h('div', {class: 'st'}, appStatus(a))));
+      cards.push(card); return card;
+    })));
+  });
+  const search = h('input', {placeholder: '🔍  Search apps…', value: S.q, style: 'width:230px', oninput: e => {
+    S.q = e.target.value.toLowerCase(); cards.forEach(c => c.style.display = c.dataset.n.includes(S.q) ? '' : 'none'); }});
+  const d0 = S.devices[0], nUp = S.lite && d0 ? d0.n_upgradable : 0;
+  return h('div', {},
+    h('div', {class: 'card hero'}, h('div', {class: 'grow'}, h('h2', {}, S.lite ? 'Set up this PC' : 'Pick your apps, click Install'),
+      h('div', {class: 'steps'}, h('span', {}, h('b', {}, '1'), 'Choose apps or a starter pack'), !S.lite && h('span', {}, h('b', {}, '2'), 'Choose devices'), h('span', {}, h('b', {}, S.lite ? '2' : '3'), 'Press Install')),
+      S.devices.length === 0 && h('p', {class: 'err', style: 'margin:12px 0 0'}, S.lite ? 'No supported package manager found (need winget, Homebrew or apt).' : 'No devices yet. Go to Devices to add your first one.')),
+      S.lite && d0 && h('div', {}, h('div', {class: 'mute', style: 'text-align:right;margin-bottom:6px'}, `${d0.n_installed} packages installed · ${nUp} update${nUp === 1 ? '' : 's'} available`),
+        h('button', {class: 'b sec', onclick: () => startJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, '⟳ Update everything'))),
+    h('div', {class: 'row', style: 'margin-bottom:12px'}, h('b', {}, 'Starter packs'),
+      S.packs.map(p => h('button', {class: 'chip' + (p.apps.every(a => S.selApps.has(a)) ? ' on' : ''), title: p.apps.join(', '), onclick: () => {
+        const all = p.apps.every(a => S.selApps.has(a)); p.apps.forEach(a => all ? S.selApps.delete(a) : S.selApps.add(a)); render(); }}, p.icon + ' ' + p.name)),
+      h('span', {class: 'grow'}), search),
+    h('div', {class: 'cats'}, ['All', ...cats].map(c => h('button', {class: 'chip' + (S.cat === c ? ' on' : ''), onclick: () => { S.cat = c; render(); }}, c))),
+    sections,
+    h('div', {class: 'bar'},
+      !S.lite && h('div', {class: 'row', style: 'margin-bottom:10px'}, h('b', {}, 'Install on'),
+        S.devices.map(d => h('button', {class: 'chip' + (S.selDevices.has(d.id) ? ' on' : ''), onclick: () => { S.selDevices.has(d.id) ? S.selDevices.delete(d.id) : S.selDevices.add(d.id); render(); }}, (d.online ? '● ' : '○ ') + d.name)),
+        S.devices.length > 1 && h('button', {class: 'chip', onclick: () => { S.selDevices = new Set(S.selDevices.size === S.devices.length ? [] : S.devices.map(d => d.id)); render(); }}, 'all / none')),
+      h('div', {class: 'row'},
+        h('button', {class: 'b big', disabled: !apps.length || !selDevs.length, onclick: () => startJob([{type: 'install', apps}], 'Install', 'Install')}, apps.length ? `Install ${plural(apps.length, 'app')}` : 'Select some apps'),
+        h('button', {class: 'b sec', disabled: !apps.length || !selDevs.length, onclick: () => startJob([{type: 'upgrade', apps}], 'Update', 'Update')}, 'Update selected'),
+        !S.lite && h('button', {class: 'b sec', disabled: !selDevs.length, onclick: () => startJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, 'Update everything'),
+        h('button', {class: 'b sec', disabled: !apps.length || !selDevs.length, onclick: () => confirm('Uninstall the selected apps?') && startJob([{type: 'uninstall', apps}], 'Uninstall', 'Uninstall')}, 'Uninstall'),
+        h('span', {class: 'grow'}),
+        !S.lite && apps.length > 0 && h('button', {class: 'b sec', onclick: () => { const n = prompt('Name this set of apps (reuse it on other devices):'); n && act(() => api('POST', '/api/profiles', {name: n, apps}), 'Saved profile "' + n + '".'); }}, 'Save as profile'),
+        apps.length > 0 && h('button', {class: 'b sec', onclick: () => { S.selApps.clear(); render(); }}, 'Clear')),
+      selDevs.length >= 4 && h('label', {class: 'mute', style: 'display:block;margin-top:8px'}, h('input', {type: 'checkbox', checked: S.rollout, onchange: e => S.rollout = e.target.checked}), ' Staged rollout: try a few devices first and stop if they fail')),
+    S.adv && !S.lite && customAppForm());
+}
+function customAppForm() {
+  const f = {}; const inp = (k, ph) => f[k] = h('input', {placeholder: ph, size: 14});
+  return h('div', {}, h('h3', {}, 'Add your own app'), h('div', {class: 'card row'}, inp('key', 'short key (e.g. myapp)'), inp('name', 'Display name'), inp('winget', 'winget id'), inp('brew', 'brew name'), inp('apt', 'apt package'),
+    h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/apps', Object.fromEntries(Object.entries(f).map(([k, e]) => [k, e.value.trim()]))), 'App added.')}, 'Add')));
+}
+
+// ---------------------------------------------------------------- devices
+function devicesView() {
+  const origin = location.origin;
+  const cmds = c => `openite enroll --server ${origin} --code ${c}`;
+  const tags = allTags();
+  return h('div', {},
+    !S.home && h('div', {class: 'card'}, h('div', {class: 'row'}, h('div', {class: 'grow'}, h('h2', {}, 'Add a device'), h('span', {class: 'mute'}, 'Generate a code, then run the command on the device you want to add.')),
+      h('button', {class: 'b', onclick: () => act(async () => S.code = (await api('POST', '/api/enroll-code', {})).code)}, 'Get enrollment command')),
+      S.code && h('div', {}, h('p', {class: 'mute'}, 'Valid 15 minutes, works once. Then keep it running with ', h('code', {}, 'openite run'), ' or install it as a service: ', h('code', {}, 'openite install-service')), h('pre', {}, cmds(S.code))),
+      S.adv && enrollKeyForm()),
+    S.devices.length > 1 && h('div', {class: 'row', style: 'margin-bottom:12px'}, h('b', {}, 'Select'),
+      h('button', {class: 'chip', onclick: () => { S.selDevices = new Set(S.devices.map(d => d.id)); render(); }}, 'All'),
+      h('button', {class: 'chip', onclick: () => { S.selDevices.clear(); render(); }}, 'None'),
+      tags.map(t => h('button', {class: 'chip', onclick: () => { S.devices.filter(d => d.tags.includes(t)).forEach(d => S.selDevices.add(d.id)); render(); }}, '#' + t))),
+    S.devices.length === 0 && h('p', {class: 'mute'}, 'No devices yet.'),
+    S.devices.map(d => h('div', {class: 'card row'},
+      h('input', {type: 'checkbox', checked: S.selDevices.has(d.id), onchange: e => { e.target.checked ? S.selDevices.add(d.id) : S.selDevices.delete(d.id); render(); }}),
+      h('span', {class: 'dot' + (d.online ? ' on' : ''), title: d.online ? 'online' : 'offline'}),
+      h('div', {class: 'grow'}, h('b', {}, d.name), ' ', d.tags.map(t => h('span', {class: 'tag', style: 'margin-right:4px'}, '#' + t)),
+        h('div', {class: 'mute'}, `${d.online ? 'Online' : 'Offline, last seen ' + ago(d.last_seen)} · ${d.os || '?'} · ${d.manager || '?'} · ${plural(d.n_installed, 'package')}`, d.n_upgradable ? ` · ${plural(d.n_upgradable, 'update')} available` : ''),
+        d.managed && (d.missing.length ? h('div', {class: 'tag bad'}, `Out of sync, missing: ${d.missing.join(', ')}`) : h('div', {class: 'tag ok'}, '✔ In sync'))),
+      !S.lite && [
+        h('button', {class: 'b sec', onclick: () => { const v = prompt('Tags, comma separated (e.g. prod, kitchen, gaming):', d.tags.join(', ')); v != null && act(() => api('PUT', '/api/devices/' + d.id, {tags: v.split(',').map(s => s.trim()).filter(Boolean)})); }}, 'Tags'),
+        h('button', {class: 'b sec', onclick: () => { const n = prompt('Rename device', d.name); n && act(() => api('PUT', '/api/devices/' + d.id, {name: n})); }}, 'Rename'),
+        h('button', {class: 'b sec', onclick: () => confirm('Remove ' + d.name + ' from your account? (Also stop its agent.)') && act(() => api('DELETE', '/api/devices/' + d.id))}, 'Remove')])));
+}
+function enrollKeyForm() {
+  const tags = h('input', {placeholder: 'tags for new devices, e.g. prod, dc:eu'});
+  return h('div', {style: 'margin-top:12px'}, h('div', {class: 'row'}, h('span', {class: 'mute'}, 'Automation / golden images:'), tags,
+    h('button', {class: 'b sec', onclick: () => act(async () => S.key = (await api('POST', '/api/enroll-code', {reusable: true, tags: tags.value.split(',').map(s => s.trim()).filter(Boolean)})).code)}, 'Create reusable key')),
+    S.key && h('div', {}, h('p', {class: 'mute'}, 'Reusable key: every device that enrolls with it joins with those tags. Keep it secret; it doesn\'t expire.'), h('pre', {}, `openite enroll --server ${location.origin} --code ${S.key}`)));
+}
+
+// ---------------------------------------------------------------- activity
+function activityView() {
+  const dn = id => (S.devices.find(d => d.id === id) || {name: '#' + id}).name;
+  const word = {queued: 'waiting', running: 'running…', done: '✔ finished', failed: '✘ failed', halted: 'not started (rollout stopped)', cancelled: 'cancelled'};
+  return h('div', {}, S.jobs.length === 0 && h('div', {class: 'card mute'}, 'Nothing has run yet. Go to ', h('b', {}, 'Install apps'), ' to get started.'),
+    S.jobs.map(j => h('div', {class: 'card'}, h('div', {class: 'row', style: 'cursor:pointer', onclick: () => { S.openJob = S.openJob === j.id ? null : j.id; render(); }},
+      !S.lite && h('b', {}, dn(j.device_id)), h('span', {class: 'grow'}, j.title, j.source === 'reconcile' && h('span', {class: 'tag', style: 'margin-left:6px'}, 'auto'), j.rollout_id && h('span', {class: 'tag', style: 'margin-left:6px'}, 'stage ' + (j.batch + 1))),
+      h('span', {class: 'st-' + j.status}, j.status === 'running' && h('span', {class: 'spin'}), word[j.status] || j.status), h('span', {class: 'mute'}, ago(j.created)),
+      ['queued', 'halted'].includes(j.status) && h('button', {class: 'b sec', onclick: e => { e.stopPropagation(); act(() => api('POST', `/api/jobs/${j.id}/cancel`)); }}, 'Cancel')),
+      S.openJob === j.id && h('pre', {style: 'margin-top:10px'}, j.log || (j.status === 'queued' ? 'Waiting for the device to pick this up (it checks in every few seconds while its agent is running).' : j.status === 'running' ? 'Working… installs can take a few minutes. Windows may ask for permission.' : '(no output)')))));
+}
+
+// ---------------------------------------------------------------- advanced tabs
+function profilesView() {
+  const byKey = Object.fromEntries(S.catalog.map(a => [a.key, a.name]));
+  return h('div', {}, h('p', {class: 'mute'}, 'A profile is a reusable set of apps, optionally followed by setup scripts. Create one on the Install tab ("Save as profile").'),
+    S.profiles.length === 0 && h('p', {class: 'mute'}, 'No profiles yet.'),
+    S.profiles.map(p => {
+      const pick = h('select', {multiple: true, size: Math.min(4, Math.max(2, S.scripts.length))}, S.scripts.map(s => h('option', {value: s.id, selected: p.script_ids.includes(s.id)}, s.name)));
+      return h('div', {class: 'card'}, h('div', {class: 'row'}, h('b', {class: 'grow'}, p.name),
+        h('button', {class: 'b', onclick: () => startJob([{type: 'profile', profile_id: p.id}], 'Profile: ' + p.name, 'Profile')}, 'Apply to selected devices'),
+        h('button', {class: 'b sec', onclick: () => confirm('Delete this profile?') && act(() => api('DELETE', '/api/profiles/' + p.id))}, 'Delete')),
+        h('p', {}, p.apps.map(k => byKey[k] || k).join(', ') || 'no apps'),
+        S.scripts.length > 0 && h('div', {class: 'row'}, h('span', {class: 'mute'}, 'Setup scripts to run after installing:'), pick,
+          h('button', {class: 'b sec', onclick: () => act(() => api('PUT', '/api/profiles/' + p.id, {script_ids: [...pick.selectedOptions].map(o => +o.value)}), 'Saved.')}, 'Save')));
+    }));
+}
+function scriptsView() {
+  const name = h('input', {placeholder: 'Script name'});
+  const shell = h('select', {}, ['powershell', 'bash', 'cmd'].map(s => h('option', {}, s)));
+  const body = h('textarea', {placeholder: 'e.g.  git config --global user.name "Me"'});
+  return h('div', {},
+    h('div', {class: 'card'}, h('h2', {}, 'Setup scripts'), h('p', {class: 'mute'}, 'Small scripts to run on your devices after installing apps (set git name, create folders, tweak settings). They run with the agent\'s permissions, so only add scripts you trust.'),
+      h('div', {class: 'row'}, name, shell), h('div', {style: 'margin:10px 0'}, body),
+      h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/scripts', {name: name.value, shell: shell.value, body: body.value}), 'Script saved.')}, 'Save script')),
+    S.scripts.map(s => h('div', {class: 'card'}, h('div', {class: 'row'}, h('b', {class: 'grow'}, s.name), h('span', {class: 'tag'}, s.shell),
+      h('button', {class: 'b', onclick: () => startJob([{type: 'script', script_id: s.id}], 'Script: ' + s.name, 'Script')}, 'Run on selected devices'),
+      h('button', {class: 'b sec', onclick: () => confirm('Delete script?') && act(() => api('DELETE', '/api/scripts/' + s.id))}, 'Delete')), h('pre', {}, s.body))));
+}
+function automationView() {
+  const tag = h('select', {}, h('option', {value: 'all'}, 'all devices'), allTags().map(t => h('option', {value: t}, '#' + t)));
+  const prof = h('select', {}, S.profiles.map(p => h('option', {value: p.id}, p.name)));
+  const au = h('input', {type: 'checkbox'});
+  const pname = id => (S.profiles.find(p => p.id === id) || {name: '(deleted)'}).name;
+  return h('div', {},
+    h('div', {class: 'card'}, h('h2', {}, 'Keep devices in sync automatically'),
+      h('p', {class: 'mute'}, 'Choose a group of devices (by tag) and a profile. Openite installs any missing apps from that profile on every matching device, including new ones that join later, and keeps them that way.'),
+      S.profiles.length === 0 ? h('p', {}, 'Create a profile first (Install tab → "Save as profile").') :
+        h('div', {class: 'row'}, 'Devices in', tag, 'should have', prof, h('label', {}, au, ' also keep them updated'),
+          h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/assignments', {tag: tag.value, profile_id: +prof.value, auto_update: au.checked}), 'Rule added.')}, 'Add rule'))),
+    S.assignments.map(a => h('div', {class: 'card row'}, h('span', {class: 'grow'}, 'Devices in ', h('b', {}, a.tag === 'all' ? 'all devices' : '#' + a.tag), ' keep ', h('b', {}, pname(a.profile_id)), a.auto_update ? ' installed and updated' : ' installed'),
+      h('button', {class: 'b sec', onclick: () => act(() => api('DELETE', '/api/assignments/' + a.id))}, 'Remove'))));
+}
+function auditView() {
+  return h('div', {}, h('p', {class: 'mute'}, 'Who did what, latest first.'),
+    h('div', {class: 'card'}, h('table', {}, h('tr', {}, h('th', {}, 'When'), h('th', {}, 'Who'), h('th', {}, 'Action'), h('th', {}, 'Details')),
+      S.audit.map(a => h('tr', {}, h('td', {class: 'mute'}, new Date(a.ts * 1000).toLocaleString()), h('td', {}, a.actor), h('td', {}, a.action), h('td', {}, a.detail))))));
+}
+
+const VIEWS = {install: installView, devices: devicesView, activity: activityView, profiles: profilesView, scripts: scriptsView, automation: automationView, audit: auditView};
+function render() {
+  const root = document.getElementById('root'), y = scrollY;
+  if (!S.ready) { root.replaceChildren(h('main', {}, h('p', {class: 'mute', style: 'margin-top:80px;text-align:center'}, 'Starting… checking what\'s installed on this PC (a few seconds).'))); return; }
+  if (!S.token) { root.replaceChildren(authView()); return; }
+  const basic = S.lite ? ['install', 'activity'] : BASIC;
+  if ((!S.adv || S.lite) && ADV.includes(S.tab)) S.tab = 'install';
+  if (S.lite && S.tab === 'devices') S.tab = 'install';
+  const tabBtn = t => h('button', {class: S.tab === t ? 'on' : '', onclick: () => { S.tab = t; S.msg = S.err = null; render(); }}, LABEL[t] + (t === 'devices' && S.devices.length ? ` (${S.devices.length})` : '') + (t === 'activity' && S.jobs.some(j => j.status === 'running') ? ' •' : ''));
+  root.replaceChildren(h('div', {},
+    h('header', {}, h('div', {class: 'logo'}, h('i', {}, '⬇'), 'Openite'), h('nav', {}, basic.map(tabBtn), S.adv && !S.lite && [h('span', {class: 'sep'}), ADV.map(tabBtn)]),
+      !S.lite && h('label', {class: 'mute', title: 'Show profiles, scripts, auto-sync, audit log and more'}, h('input', {type: 'checkbox', checked: S.adv, onchange: e => { S.adv = e.target.checked; LS.set('adv', S.adv ? '1' : null); act(async () => {}); }}), ' Advanced'),
+      !S.home && h('span', {class: 'mute'}, S.email), !S.home && h('button', {class: 'b sec', onclick: signOut}, 'Sign out')),
+    h('main', {}, S.err && h('div', {class: 'err'}, S.err), S.msg && h('div', {class: 'ok-msg'}, S.msg), VIEWS[S.tab]())));
+  scrollTo(0, y);
+}
+
+(async function start() {
+  render();
+  try {
+    const info = await api('GET', '/api/info');
+    S.lite = !!info.lite;
+    if (info.home) { setSession(await api('GET', '/api/home')); S.home = true; }   // local mode: no login
+    if (S.token) await load();
+  } catch (e) { if (S.token && !S.lite) S.token = null; }
+  S.ready = true; render();
+  setInterval(() => { if (S.token && !document.activeElement?.matches('input,textarea,select')) load().then(render).catch(() => {}); }, 4000);
+})();
+</script>
+</body>
+</html>

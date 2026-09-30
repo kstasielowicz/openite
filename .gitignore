@@ -1,0 +1,10 @@
+openite.db*
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+dist/
+agent-go/openite-agent*
+.vscode/
+
+/openite.exe

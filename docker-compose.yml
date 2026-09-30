@@ -1,0 +1,14 @@
+# Home lab / team server:  docker compose up -d   then open http://<host>:8080
+# Put it behind HTTPS (Caddy, Traefik, nginx) before exposing it beyond your LAN.
+services:
+  openite:
+    build: .
+    restart: unless-stopped
+    ports: ["8080:8080"]
+    volumes: ["openite-data:/data"]
+    environment:
+      # After you've created your account, uncomment and restart to stop strangers registering:
+      # OPENITE_NO_REGISTRATION: "1"
+      TZ: UTC
+volumes:
+  openite-data:

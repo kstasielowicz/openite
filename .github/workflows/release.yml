@@ -1,0 +1,58 @@
+name: Release
+# Push a tag like v0.3.0 to publish. Everything a user downloads is built here from the tagged source,
+# listed in SHA256SUMS and covered by a GitHub build-provenance attestation (verifiable with `gh attestation verify`).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-go@v5
+        with: {go-version-file: go.mod}
+      - run: go test ./...
+      - run: VERSION="${GITHUB_REF_NAME#v}" ./build.sh
+      - uses: actions/upload-artifact@v4
+        with: {name: binaries, path: "dist/openite-*"}
+
+  installer:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/download-artifact@v4
+        with: {name: binaries, path: dist}
+      - run: choco install innosetup --no-progress -y
+      - shell: bash
+        run: '"/c/Program Files (x86)/Inno Setup 6/ISCC.exe" //DVersion="${GITHUB_REF_NAME#v}" installer/openite.iss'
+      # TODO before 1.0: code-sign the installer and exe (SignPath Foundation offers free signing for open source)
+      - uses: actions/upload-artifact@v4
+        with: {name: installer, path: "dist/openite-setup-*.exe"}
+
+  publish:
+    needs: [build, installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # create the release
+      id-token: write        # sign attestations
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {path: dist, merge-multiple: true}
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum openite-* > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/attest-build-provenance@v2
+        with: {subject-path: "dist/openite-*"}
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --draft
+        # Drafts need a human to press "Publish": nothing goes out automatically.
