@@ -22,7 +22,7 @@
   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1))) -Preset developer -Apps vivaldi -Yes
 #>
 param(
-  [string]$Version = "latest",          # e.g. v0.4.0; default "latest" = newest published release
+  [string]$Version = "latest",          # e.g. v0.5.0; default "latest" = newest published release
   [string[]]$Apps,                      # e.g. -Apps firefox,vlc
   [string[]]$Preset,                    # e.g. -Preset essentials,gaming
   [switch]$Yes,                         # don't ask before installing the apps

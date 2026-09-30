@@ -13,7 +13,7 @@ Open-source Ninite-style software manager. Pick apps, press Install; keep one PC
 irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1 | iex
 openite pick
 ```
-Tool + apps in one go (`-Yes` skips the question; add `-Version v0.4.0` to pin an exact release):
+Tool + apps in one go (`-Yes` skips the question; add `-Version v0.5.0` to pin an exact release):
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1))) -Preset developer -Apps vivaldi,obs -Yes
 ```
