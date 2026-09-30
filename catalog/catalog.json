@@ -70,5 +70,31 @@
 
   {"key":"steam","name":"Steam","category":"Gaming","winget":"Valve.Steam","brew":"steam"},
   {"key":"epic","name":"Epic Games Launcher","category":"Gaming","winget":"EpicGames.EpicGamesLauncher","brew":"epic-games"},
-  {"key":"gog","name":"GOG Galaxy","category":"Gaming","winget":"GOG.Galaxy","brew":"gog-galaxy"}
+  {"key":"gog","name":"GOG Galaxy","category":"Gaming","winget":"GOG.Galaxy","brew":"gog-galaxy"},
+
+  {"key":"vcredist-2015-x64","name":"Visual C++ 2015-2022 (x64)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2015+.x64","match":["microsoft visual c++ 2015-2022 redistributable (x64)","microsoft visual c++ v14 redistributable (x64)","microsoft visual c++ 2022 x64"]},
+  {"key":"vcredist-2015-x86","name":"Visual C++ 2015-2022 (x86)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2015+.x86","match":["microsoft visual c++ 2015-2022 redistributable (x86)","microsoft visual c++ v14 redistributable (x86)","microsoft visual c++ 2022 x86"]},
+  {"key":"vcredist-2013-x64","name":"Visual C++ 2013 (x64)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2013.x64","match":["microsoft visual c++ 2013 redistributable (x64)"]},
+  {"key":"vcredist-2013-x86","name":"Visual C++ 2013 (x86)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2013.x86","match":["microsoft visual c++ 2013 redistributable (x86)"]},
+  {"key":"vcredist-2012-x64","name":"Visual C++ 2012 (x64)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2012.x64","match":["microsoft visual c++ 2012 redistributable (x64)"]},
+  {"key":"vcredist-2012-x86","name":"Visual C++ 2012 (x86)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2012.x86","match":["microsoft visual c++ 2012 redistributable (x86)"]},
+  {"key":"vcredist-2010-x64","name":"Visual C++ 2010 (x64)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2010.x64","match":["microsoft visual c++ 2010 x64 redistributable"]},
+  {"key":"vcredist-2010-x86","name":"Visual C++ 2010 (x86)","category":"Runtimes & prerequisites","winget":"Microsoft.VCRedist.2010.x86","match":["microsoft visual c++ 2010 x86 redistributable"]},
+  {"key":"dotnet-desktop-8","name":".NET Desktop Runtime 8","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.DesktopRuntime.8","match":["microsoft windows desktop runtime - 8","microsoft .net windows desktop runtime 8"]},
+  {"key":"dotnet-desktop-9","name":".NET Desktop Runtime 9","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.DesktopRuntime.9","match":["microsoft windows desktop runtime - 9","microsoft .net windows desktop runtime 9"]},
+  {"key":"dotnet-desktop-10","name":".NET Desktop Runtime 10","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.DesktopRuntime.10","match":["microsoft windows desktop runtime - 10","microsoft .net windows desktop runtime 10"]},
+  {"key":"dotnet-runtime-8","name":".NET Runtime 8","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.Runtime.8","match":["microsoft .net runtime - 8"]},
+  {"key":"dotnet-runtime-9","name":".NET Runtime 9","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.Runtime.9","match":["microsoft .net runtime - 9"]},
+  {"key":"dotnet-aspnet-8","name":"ASP.NET Core Runtime 8","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.AspNetCore.8","match":["microsoft asp.net core 8"]},
+  {"key":"dotnet-sdk-8","name":".NET SDK 8","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.SDK.8","match":["microsoft .net sdk 8"]},
+  {"key":"dotnet-sdk-9","name":".NET SDK 9","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.SDK.9","match":["microsoft .net sdk 9"]},
+  {"key":"dotnet-sdk-10","name":".NET SDK 10","category":"Runtimes & prerequisites","winget":"Microsoft.DotNet.SDK.10","match":["microsoft .net sdk 10"]},
+  {"key":"directx","name":"DirectX End-User Runtime","category":"Runtimes & prerequisites","winget":"Microsoft.DirectX","match":["microsoft directx"]},
+  {"key":"webview2","name":"WebView2 Runtime","category":"Runtimes & prerequisites","winget":"Microsoft.EdgeWebView2Runtime","match":["microsoft edge webview2 runtime"]},
+  {"key":"java-21","name":"Java 21 (Temurin JRE)","category":"Runtimes & prerequisites","winget":"EclipseAdoptium.Temurin.21.JRE","match":["eclipse temurin jre with hotspot 21"]},
+  {"key":"java-17","name":"Java 17 (Temurin JRE)","category":"Runtimes & prerequisites","winget":"EclipseAdoptium.Temurin.17.JRE","match":["eclipse temurin jre with hotspot 17"]},
+
+  {"key":"intel-dsa","name":"Intel Driver & Support Assistant","category":"Drivers & hardware","winget":"Intel.IntelDriverAndSupportAssistant","match":["intel driver & support assistant","intel(r) driver & support assistant"]},
+  {"key":"dell-command-update","name":"Dell Command | Update","category":"Drivers & hardware","winget":"Dell.CommandUpdate","match":["dell command | update"]},
+  {"key":"lenovo-system-update","name":"Lenovo System Update","category":"Drivers & hardware","winget":"Lenovo.SystemUpdate","match":["lenovo system update"]}
 ]

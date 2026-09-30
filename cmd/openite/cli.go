@@ -15,19 +15,21 @@ const usage = `openite: install and update software from one place.
 
 Everyday use
   openite                         open the web UI for this PC
-  openite pick                    choose presets/apps in the terminal, then install
+  openite pick                    choose presets and apps with the arrow keys, then install
   openite install firefox vlc     install apps by name
   openite install --preset developer
   openite update [app ...]        update apps (no names = update everything)
-  openite uninstall app ...
+  openite uninstall app ...       silent uninstall, no windows to click through
   openite list [category]         show the catalog
   openite search <text>
   openite presets                 show starter packs
   openite status                  what is installed / outdated on this PC
+  openite drivers                 detect your hardware and suggest the right driver tools
+  openite schedule daily 03:00    update everything automatically (also: weekly mon 03:00, off, status)
 
 Flags for install/update/uninstall:  -y (don't ask)  --dry-run (show, don't do)  --preset NAME
 
-Managing many devices (needs an Openite server)
+Managing many devices (needs an Openite server, see docs/SERVER.md)
   openite enroll --server URL --code CODE
   openite run | once | install-service | uninstall-service
 
@@ -39,11 +41,23 @@ func sortedApps() []catalog.App {
 	apps := catalog.Apps()
 	sort.SliceStable(apps, func(i, j int) bool {
 		if apps[i].Category != apps[j].Category {
-			return apps[i].Category < apps[j].Category
+			return categoryRank(apps[i].Category) < categoryRank(apps[j].Category) ||
+				(categoryRank(apps[i].Category) == categoryRank(apps[j].Category) && apps[i].Category < apps[j].Category)
 		}
 		return strings.ToLower(apps[i].Name) < strings.ToLower(apps[j].Name)
 	})
 	return apps
+}
+
+// Everyday categories first, plumbing (runtimes, drivers) last.
+func categoryRank(c string) int {
+	switch c {
+	case "Runtimes & prerequisites":
+		return 2
+	case "Drivers & hardware":
+		return 3
+	}
+	return 1
 }
 
 // resolve turns user input ("firefox", "Visual Studio Code", "vsc", "preset:gaming") into catalog apps.
@@ -109,16 +123,17 @@ func resolve(tokens []string, presets []string) ([]catalog.App, error) {
 
 func cmdList(args []string) {
 	filter := strings.ToLower(strings.Join(args, " "))
+	banner("app catalog")
 	last := ""
 	for _, a := range sortedApps() {
 		if filter != "" && !strings.Contains(strings.ToLower(a.Category), filter) {
 			continue
 		}
 		if a.Category != last {
-			fmt.Printf("\n%s\n", a.Category)
+			fmt.Printf("\n  %s\n", bold(a.Category))
 			last = a.Category
 		}
-		fmt.Printf("  %-18s %s\n", a.Key, a.Name)
+		fmt.Printf("    %-22s %s\n", cyan(a.Key), a.Name)
 	}
 	fmt.Println()
 }
@@ -131,7 +146,7 @@ func cmdSearch(args []string) {
 	n := 0
 	for _, a := range sortedApps() {
 		if strings.Contains(strings.ToLower(a.Name+" "+a.Key+" "+a.Category), q) {
-			fmt.Printf("  %-18s %s  (%s)\n", a.Key, a.Name, a.Category)
+			fmt.Printf("  %-22s %s  %s\n", cyan(a.Key), a.Name, dim("("+a.Category+")"))
 			n++
 		}
 	}
@@ -141,6 +156,7 @@ func cmdSearch(args []string) {
 }
 
 func cmdPresets([]string) {
+	banner("starter presets")
 	for _, p := range catalog.Packs() {
 		names := []string{}
 		for _, k := range p.Apps {
@@ -148,9 +164,9 @@ func cmdPresets([]string) {
 				names = append(names, a.Name)
 			}
 		}
-		fmt.Printf("  %-12s %s  %s\n               %s\n", p.ID, p.Icon, p.Name, strings.Join(names, ", "))
+		fmt.Printf("\n  %s %s  %s\n      %s\n", p.Icon, bold(p.Name), dim("("+p.ID+")"), dim(strings.Join(names, ", ")))
 	}
-	fmt.Println("\nInstall one with:  openite install --preset developer")
+	fmt.Printf("\n  Install one with:  %s\n\n", cyan("openite install --preset developer"))
 }
 
 func needBackend() Backend {
@@ -161,36 +177,42 @@ func needBackend() Backend {
 	return b
 }
 
-func stateOf(a catalog.App, b Backend, inv catalog.Inventory) (installed, outdated bool) {
-	return a.State(b.Name(), inv)
+func inventoryWithSpinner(b Backend) catalog.Inventory {
+	var inv catalog.Inventory
+	withSpinner("Checking what's installed on this PC", func() bool { inv = b.Inventory(); return true })
+	return inv
 }
 
 func cmdStatus([]string) {
 	b := needBackend()
-	fmt.Println("Checking what's installed (this takes a few seconds)…")
-	inv := b.Inventory()
+	banner("status of this PC")
+	inv := inventoryWithSpinner(b)
 	last := ""
 	nInst, nOld := 0, 0
 	for _, a := range sortedApps() {
 		if a.Pkg(b.Name()) == "" {
 			continue
 		}
-		in, old := stateOf(a, b, inv)
+		in, old := a.State(b.Name(), inv)
 		if !in {
 			continue
 		}
 		if a.Category != last {
-			fmt.Printf("\n%s\n", a.Category)
+			fmt.Printf("\n  %s\n", bold(a.Category))
 			last = a.Category
 		}
-		mark := "✔"
+		mark := okMark() + " " + a.Name
 		if old {
-			mark, nOld = "↑ update available", nOld+1
+			mark, nOld = yellow("↑")+" "+a.Name+"  "+yellow("update available"), nOld+1
 		}
 		nInst++
-		fmt.Printf("  %-18s %s %s\n", a.Key, a.Name, mark)
+		fmt.Printf("    %s\n", mark)
 	}
-	fmt.Printf("\n%d catalog apps installed, %d with updates. Update all: openite update\n", nInst, nOld)
+	fmt.Printf("\n  %s catalog apps installed, %s with updates.", green(strconv.Itoa(nInst)), yellow(strconv.Itoa(nOld)))
+	if nOld > 0 {
+		fmt.Printf("  Update all: %s", cyan("openite update"))
+	}
+	fmt.Print("\n\n")
 }
 
 type changeOpts struct {
@@ -228,7 +250,7 @@ func parseChangeArgs(args []string) changeOpts {
 var stdin = bufio.NewReader(os.Stdin) // one shared reader so prompts never lose buffered input
 
 func confirm(q string) bool {
-	fmt.Print(q + " [Y/n] ")
+	fmt.Print(q + " " + dim("[Y/n]") + " ")
 	line, err := stdin.ReadString('\n')
 	if err != nil && line == "" { // no terminal / closed pipe: never assume consent
 		fmt.Println("\nNo input available; cancelled. Use -y to skip the question.")
@@ -244,8 +266,7 @@ func cmdChange(kind string, args []string) {
 		dryRun = true
 	}
 	var apps []catalog.App
-	if kind == "upgrade" && len(o.names) == 0 && len(o.presets) == 0 {
-	} else {
+	if !(kind == "upgrade" && len(o.names) == 0 && len(o.presets) == 0) {
 		if len(o.names) == 0 && len(o.presets) == 0 {
 			die("Tell me what to %s, e.g.  openite %s firefox vlc   or   openite %s --preset essentials\nOr run `openite pick` to choose interactively.", kind, os.Args[1], os.Args[1])
 		}
@@ -257,21 +278,27 @@ func cmdChange(kind string, args []string) {
 	runChange(kind, apps, needBackend(), o.yes)
 }
 
+func stepFor(kind string, a catalog.App, pkg string) Step {
+	return Step{Type: kind, App: a.Name, Pkg: pkg, Aliases: append([]string{a.Name}, a.Match...)}
+}
+
 // runChange previews, asks, then runs each app as its own step so one failure doesn't stop the rest.
 func runChange(kind string, apps []catalog.App, b Backend, yes bool) {
 	verb := map[string]string{"install": "Install", "upgrade": "Update", "uninstall": "Uninstall"}[kind]
+	ing := map[string]string{"install": "Installing", "upgrade": "Updating", "uninstall": "Removing"}[kind]
+	banner(strings.ToLower(verb))
 	var steps []Step
 	if kind == "upgrade" && len(apps) == 0 {
-		fmt.Println("Will update everything that has an update available.")
+		fmt.Printf("\n  Will update %s that has an update available.\n", bold("everything"))
 		steps = []Step{{Type: "upgrade", All: true}}
 	} else {
-		fmt.Printf("%s:\n", verb)
+		fmt.Println()
 		for _, a := range apps {
 			if pkg := a.Pkg(b.Name()); pkg != "" {
-				fmt.Printf("  • %s\n", a.Name)
-				steps = append(steps, Step{Type: kind, App: a.Name, Pkg: pkg})
+				fmt.Printf("  %s %s\n", cyan("•"), a.Name)
+				steps = append(steps, stepFor(kind, a, pkg))
 			} else {
-				fmt.Printf("  • %s (skipped: not available via %s)\n", a.Name, b.Name())
+				fmt.Printf("  %s %s %s\n", dim("•"), dim(a.Name), dim("(skipped: not available via "+b.Name()+")"))
 			}
 		}
 		if len(steps) == 0 {
@@ -279,54 +306,125 @@ func runChange(kind string, apps []catalog.App, b Backend, yes bool) {
 		}
 	}
 	if dryRun {
-		fmt.Println("\n(dry run: nothing will actually be changed)")
+		fmt.Println("\n  " + yellow("Dry run: nothing will actually be changed."))
 	}
-	if !yes && !confirm("\nProceed?") {
-		fmt.Println("Cancelled.")
+	fmt.Println()
+	if !yes && !confirm("  Proceed?") {
+		fmt.Println("  Cancelled.")
 		return
 	}
-	if kind == "uninstall" && !yes && !confirm("Really uninstall? This removes the apps.") {
+	if kind == "uninstall" && !yes && !confirm("  Really uninstall? This removes the apps.") {
 		return
 	}
+	fmt.Println()
 	fail := 0
-	for i, s := range steps {
-		label := s.App
+	for _, s := range steps {
+		label := ing + " " + s.App
 		if s.All {
-			label = "everything"
+			label = "Updating everything"
 		}
-		fmt.Printf("[%d/%d] %s %s … ", i+1, len(steps), strings.ToLower(verb), label)
 		var lines []string
-		status := executeJob(Job{Steps: []Step{s}}, b, func(l string) { lines = append(lines, l) })
-		if status == "done" {
-			fmt.Println("done")
-		} else {
+		ok := withSpinner(label, func() bool {
+			return executeJob(Job{Steps: []Step{s}}, b, func(l string) { lines = append(lines, l) }) == "done"
+		})
+		if !ok {
 			fail++
-			fmt.Println("FAILED")
-			fmt.Println(indent(strings.Join(lines, "\n"), "      "))
+			fmt.Println(dim(indent(strings.Join(lines, "\n"), "      ")))
+		} else if dryRun {
+			for _, l := range lines {
+				if strings.HasPrefix(l, "[dry-run]") {
+					fmt.Println(dim("      " + l))
+				}
+			}
 		}
 	}
+	fmt.Println()
 	if fail > 0 {
-		fmt.Printf("\n%d of %d failed. Administrator rights are needed for some installs; try an elevated terminal.\n", fail, len(steps))
+		fmt.Printf("  %s %d of %d failed. Some installs need Administrator rights; try an elevated terminal.\n\n", failMark(), fail, len(steps))
 		os.Exit(1)
 	}
-	fmt.Println("\nAll done.")
+	fmt.Printf("  %s %s\n\n", okMark(), bold("All done."))
 }
 
 func indent(s, p string) string {
 	lines := strings.Split(strings.TrimSpace(s), "\n")
-	if len(lines) > 15 {
-		lines = lines[len(lines)-15:]
+	if len(lines) > 12 {
+		lines = lines[len(lines)-12:]
 	}
 	return p + strings.Join(lines, "\n"+p)
 }
 
-// cmdPick is the friendly interactive flow: presets first, then individual apps.
+// cmdPick: presets first, then fine-tune individual apps, then confirm and install.
 func cmdPick(args []string) {
 	o := parseChangeArgs(args)
 	if o.dry {
 		dryRun = true
 	}
 	b := needBackend()
+	if !interactive {
+		pickPlain(b)
+		return
+	}
+	banner("guided setup")
+	fmt.Println()
+	inv := inventoryWithSpinner(b)
+
+	packs := catalog.Packs()
+	var pitems []tuiItem
+	for _, p := range packs {
+		names := []string{}
+		for _, k := range p.Apps {
+			if a, ok := catalog.Find(k); ok && len(names) < 4 {
+				names = append(names, a.Name)
+			}
+		}
+		pitems = append(pitems, tuiItem{Key: p.ID, Label: p.Icon + " " + p.Name, Note: strings.Join(names, ", ") + "…"})
+	}
+	chosenPacks, ok := multiSelect("What do you want to set up?", "Pick any starter presets. You can fine-tune the exact apps on the next screen.", pitems)
+	if !ok {
+		fmt.Println("  Cancelled.")
+		return
+	}
+	preselect := map[string]bool{}
+	for _, id := range chosenPacks {
+		for _, p := range packs {
+			if p.ID == id {
+				for _, k := range p.Apps {
+					preselect[k] = true
+				}
+			}
+		}
+	}
+
+	var aitems []tuiItem
+	for _, a := range sortedApps() {
+		if a.Pkg(b.Name()) == "" {
+			continue
+		}
+		in, old := a.State(b.Name(), inv)
+		it := tuiItem{Key: a.Key, Label: a.Name, Group: a.Category, Checked: preselect[a.Key] && !in, Dim: in}
+		if old {
+			it.Note, it.Dim = "update available", false
+		} else if in {
+			it.Note = "✔ installed"
+		}
+		aitems = append(aitems, it)
+	}
+	keys, ok := multiSelect("Choose your apps", "Space ticks an app. Already-installed apps are marked. Runtimes and drivers are at the bottom.", aitems)
+	if !ok || len(keys) == 0 {
+		fmt.Println("  Nothing selected.")
+		return
+	}
+	var sel []catalog.App
+	for _, k := range keys {
+		a, _ := catalog.Find(k)
+		sel = append(sel, a)
+	}
+	runChange("install", sel, b, false)
+}
+
+// pickPlain is the no-terminal fallback (scripts, pipes): numbered lists.
+func pickPlain(b Backend) {
 	ask := func(q string) string {
 		fmt.Print(q)
 		l, err := stdin.ReadString('\n')
@@ -335,9 +433,8 @@ func cmdPick(args []string) {
 		}
 		return strings.TrimSpace(l)
 	}
-	fmt.Println("Openite: choose what to install.\nChecking what's already installed…")
+	fmt.Println("Openite: choose what to install.")
 	inv := b.Inventory()
-
 	packs := catalog.Packs()
 	fmt.Println("\nStarter presets:")
 	for i, p := range packs {
@@ -351,57 +448,48 @@ func cmdPick(args []string) {
 			order = append(order, k)
 		}
 	}
-	for _, f := range strings.FieldsFunc(ask("\nPreset numbers (e.g. 1 3), or press Enter to skip: "), func(r rune) bool { return r == ' ' || r == ',' }) {
+	sep := func(r rune) bool { return r == ' ' || r == ',' }
+	for _, f := range strings.FieldsFunc(ask("\nPreset numbers (e.g. 1 3), or Enter to skip: "), sep) {
 		if n, err := strconv.Atoi(f); err == nil && n >= 1 && n <= len(packs) {
 			for _, k := range packs[n-1].Apps {
 				pick(k)
 			}
-		} else {
-			fmt.Printf("  (ignored %q)\n", f)
 		}
 	}
-
 	apps := sortedApps()
-	fmt.Println("\nAll apps ([✔] = already installed):")
+	fmt.Println("\nAll apps ([✔] = installed):")
 	last := ""
 	for i, a := range apps {
 		if a.Category != last {
 			fmt.Printf("\n  %s\n", a.Category)
 			last = a.Category
 		}
-		mark := " "
-		if in, _ := stateOf(a, b, inv); in {
+		mark, sel := " ", " "
+		if installed, _ := a.State(b.Name(), inv); installed {
 			mark = "✔"
 		}
-		sel := " "
 		if chosen[a.Key] {
 			sel = "*"
 		}
 		fmt.Printf("   %s[%s] %3d  %s\n", sel, mark, i+1, a.Name)
 	}
-	fmt.Println("\n  (* = selected by your presets)")
-	for _, f := range strings.FieldsFunc(ask("\nAdd more: numbers or names, e.g. 4 12 vivaldi (Enter for none): "), func(r rune) bool { return r == ' ' || r == ',' }) {
+	for _, f := range strings.FieldsFunc(ask("\nAdd more: numbers or names (Enter for none): "), sep) {
 		if n, err := strconv.Atoi(f); err == nil && n >= 1 && n <= len(apps) {
 			pick(apps[n-1].Key)
 		} else if r, err := resolve([]string{f}, nil); err == nil {
 			pick(r[0].Key)
-		} else {
-			fmt.Printf("  (ignored: %v)\n", err)
 		}
 	}
 	var sel []catalog.App
 	for _, k := range order {
 		a, _ := catalog.Find(k)
-		if in, _ := stateOf(a, b, inv); in {
-			fmt.Printf("  %s is already installed, skipping.\n", a.Name)
-			continue
+		if installed, _ := a.State(b.Name(), inv); !installed {
+			sel = append(sel, a)
 		}
-		sel = append(sel, a)
 	}
 	if len(sel) == 0 {
 		fmt.Println("Nothing to install.")
 		return
 	}
-	fmt.Println()
 	runChange("install", sel, b, false)
 }

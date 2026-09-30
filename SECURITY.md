@@ -15,6 +15,9 @@ Please **don't open a public issue**. Use GitHub's private vulnerability reporti
 - **Tampered download.** Release binaries are built by GitHub Actions from the tagged commit with a reproducible build (`./build.sh`; same source gives the same bytes), published with `SHA256SUMS` and a build-provenance attestation. `install.ps1` / `install.sh` verify the checksum (and the attestation when `gh` is available) before installing, and install per-user without admin rights.
 - **Server compromise / malicious scripts.** Scripts on the fleet server are remote code execution on every enrolled device by design. Keep the server private or behind HTTPS + your own auth; use tags and staged rollouts; review the audit log. The agent refuses plain `http://` to public addresses (LAN/loopback are fine) unless `--allow-insecure`.
 - **Stolen device token.** Tokens are per device, stored `0600`, and can be revoked by removing the device in the UI.
+- **Headless uninstall.** For apps installed outside winget, Openite runs the uninstall command Windows itself stored in the registry, adding only known silent switches (MSI `/qn`, Inno `/VERYSILENT`, NSIS `/S`). Nothing from the network is ever executed, and each step has a 10-minute limit.
+- **Drivers.** Openite never downloads or installs raw driver packages. It installs vendors' own update tools from winget or opens fixed official vendor URLs.
+- **Icons.** Brand icons are static SVGs from Simple Icons (CC0) shown only inside `<img>` tags, so they can't run script; fetched by `tools/fetch_icons.py` at a pinned version.
 - **Accidental installs.** Commands preview the plan and ask first; with no terminal input they cancel instead of assuming yes. `--dry-run` shows everything without changing anything.
 
 ## Known gaps (alpha)

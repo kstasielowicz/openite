@@ -36,6 +36,8 @@ type Step struct {
 	Shell  string `json:"shell"`
 	Body   string `json:"body"`
 	Reason string `json:"reason"`
+	// Aliases are the display names the app has in "installed programs"; used for headless uninstall.
+	Aliases []string `json:"aliases"`
 }
 
 type Job struct {
@@ -173,6 +175,9 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 			}
 			var cmds [][]string
 			switch {
+			case s.Type == "uninstall" && b.Name() == "winget" && runtime.GOOS == "windows" && (pkg == "" || catalog.SafeID.MatchString(pkg)):
+				code, out = smartUninstall(s, b)
+				good = b.OK(code)
 			case pkg != "" && !catalog.SafeID.MatchString(pkg): // never hand odd-looking ids (e.g. "--flag") to a package manager
 				good, out = false, fmt.Sprintf("refusing unsafe package id %q", pkg)
 			case s.Type == "install":
@@ -323,6 +328,7 @@ func cmdRun(args []string, loop bool) {
 }
 
 func main() {
+	initTerminal()
 	args := os.Args[1:]
 	if len(args) == 0 {
 		args = []string{"ui"} // double-clicking the exe opens the UI
@@ -351,6 +357,10 @@ func main() {
 		cmdPresets(rest)
 	case "status":
 		cmdStatus(rest)
+	case "drivers":
+		cmdDrivers(rest)
+	case "schedule":
+		cmdSchedule(rest)
 	case "install":
 		cmdChange("install", rest)
 	case "update", "upgrade":

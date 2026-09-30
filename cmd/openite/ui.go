@@ -38,12 +38,14 @@ type uiJob struct {
 }
 
 type localUI struct {
-	b     Backend
-	token string
-	mu    sync.Mutex
-	jobs  []*uiJob
-	inv   catalog.Inventory
-	queue chan *uiJob
+	b      Backend
+	token  string
+	mu     sync.Mutex
+	jobs   []*uiJob
+	inv    catalog.Inventory
+	queue  chan *uiJob
+	hw     Hardware
+	advice []Advice
 }
 
 func now() float64 { return float64(time.Now().UnixNano()) / 1e9 }
@@ -86,6 +88,13 @@ func fail(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
 }
 
+var iconName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*\.svg$`)
+
+func catalogHas(key, manager string) bool {
+	a, ok := catalog.Find(key)
+	return ok && a.Pkg(manager) != ""
+}
+
 var hostOK = regexp.MustCompile(`^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$`)
 
 func (u *localUI) device() map[string]any {
@@ -124,7 +133,56 @@ func (u *localUI) handler() http.Handler {
 	mux.HandleFunc("/api/home", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"token": u.token, "email": "This PC", "home": true})
 	})
-	mux.HandleFunc("/api/catalog", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, catalog.Apps()) })
+	mux.HandleFunc("/api/catalog", func(w http.ResponseWriter, r *http.Request) {
+		apps := []catalog.App{} // only what this PC's package manager can actually install
+		for _, a := range catalog.Apps() {
+			if a.Pkg(u.b.Name()) != "" {
+				apps = append(apps, a)
+			}
+		}
+		writeJSON(w, 200, apps)
+	})
+	mux.HandleFunc("/icons/", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/icons/")
+		if !iconName.MatchString(name) {
+			fail(w, 404, "not found")
+			return
+		}
+		data, err := web.Files.ReadFile("icons/" + name)
+		if err != nil {
+			fail(w, 404, "not found")
+			return
+		}
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Write(data)
+	})
+	mux.HandleFunc("/api/hardware", func(w http.ResponseWriter, r *http.Request) {
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		adv := []Advice{}
+		for _, a := range u.advice {
+			if a.AppKey == "" || catalogHas(a.AppKey, u.b.Name()) {
+				adv = append(adv, a)
+			}
+		}
+		writeJSON(w, 200, map[string]any{"hardware": u.hw, "advice": adv})
+	})
+	mux.HandleFunc("/api/drivers/open", func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Title string }
+		json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body)
+		u.mu.Lock()
+		defer u.mu.Unlock()
+		for _, a := range u.advice { // only fixed vendor URLs from our own advice list can be opened
+			if a.Title == body.Title && a.URL != "" {
+				openBrowser(a.URL)
+				writeJSON(w, 200, map[string]any{})
+				return
+			}
+		}
+		fail(w, 404, "unknown item")
+	})
 	mux.HandleFunc("/api/packs", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, catalog.Packs()) })
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, []any{u.device()}) })
 	mux.HandleFunc("/api/profiles", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, []any{}) })
@@ -168,7 +226,7 @@ func (u *localUI) handler() http.Handler {
 					return
 				}
 				if pkg := a.Pkg(u.b.Name()); pkg != "" {
-					steps = append(steps, Step{Type: s.Type, App: a.Name, Pkg: pkg})
+					steps = append(steps, stepFor(s.Type, a, pkg))
 				} else {
 					steps = append(steps, Step{Type: "skip", App: a.Name, Reason: "no " + u.b.Name() + " package id"})
 				}
@@ -253,6 +311,12 @@ func cmdUI(args []string) {
 	url := fmt.Sprintf("http://localhost:%d", ln.Addr().(*net.TCPAddr).Port)
 	fmt.Printf("Openite is running at %s\nKeep this window open while you use it. Press Ctrl+C to quit.\n", url)
 	go u.worker()
+	go func() {
+		h := detectHardware()
+		u.mu.Lock()
+		u.hw, u.advice = h, driverAdvice(h)
+		u.mu.Unlock()
+	}()
 	go func() {
 		for {
 			u.refresh()

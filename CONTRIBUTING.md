@@ -11,6 +11,7 @@ Rules (enforced by `go test ./catalog` and reviewers):
 - Verify the id yourself: `winget show --id <id> -e`, `brew info <name>`, `apt show <name>`.
 - Key: lowercase, unique. Name: the vendor's product name.
 - Detection: the app is matched by package id **and** by the display name Windows lists it under. If the name differs from `name` (e.g. "Mozilla Firefox"), add `"match":["mozilla firefox"]`. Check with `winget list` on a machine where it's installed.
+- Icons: add the app's Simple Icons slug to `tools/fetch_icons.py` and run it; apps without a brand icon get a letter tile automatically.
 - Starter packs live in `catalog/packs.json`; keep them small and unsurprising.
 
 ## Code

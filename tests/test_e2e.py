@@ -176,6 +176,51 @@ class E2E(unittest.TestCase):
         self.assertFalse(any(a.process_once() for a, _ in agents))
         self.assertTrue(any(a["action"] == "rollout.halted" for a in self.call("GET", "/api/audit", token=tok)[1]))
 
+    def test_scheduled_updates(self):
+        import datetime
+        tok = self.register("sched@b.co")
+        ag, did = self.enroll(tok, "nightly", tags=["nas"])
+        self.assertEqual(self.call("POST", "/api/schedules", {"tag": "nas", "time": "25:00"}, tok)[0], 400)
+        self.assertEqual(self.call("POST", "/api/schedules", {"tag": "nas", "time": "03:00", "days": ["funday"]}, tok)[0], 400)
+        s, r = self.call("POST", "/api/schedules", {"tag": "nas", "time": "03:00", "days": ["sun"]}, tok)
+        self.assertEqual(s, 200)
+        self.assertEqual(self.call("GET", "/api/schedules", token=tok)[1][0]["days"], ["sun"])
+        sunday = datetime.datetime(2026, 10, 4, 3, 5)  # a Sunday
+        self.assertEqual(server.run_due_schedules(datetime.datetime(2026, 10, 3, 3, 5)), 0)   # Saturday: wrong day
+        self.assertEqual(server.run_due_schedules(datetime.datetime(2026, 10, 4, 2, 59)), 0)  # too early
+        self.assertEqual(server.run_due_schedules(sunday), 1)                                # due
+        self.assertEqual(server.run_due_schedules(sunday), 0)                                # only once per day
+        job = ag.process_once()
+        self.assertEqual(job["steps"], [{"type": "upgrade", "all": True}])
+        _, jobs = self.call("GET", "/api/jobs", token=tok)
+        self.assertEqual(jobs[0]["title"], "Scheduled update")
+        self.assertTrue(any(a["action"] == "schedule.add" for a in self.call("GET", "/api/audit", token=tok)[1]))
+
+    def test_runtime_catalog_detection(self):
+        tok = self.register("rt@b.co")
+        ag, did = self.enroll(tok, "gamer")
+        ag.checkin(names={"Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.38.33135": "14.38",
+                          "Microsoft Windows Desktop Runtime - 8.0.10 (x64)": "8.0.10",
+                          "Microsoft Visual C++ 2010  x64 Redistributable - 10.0.40219": "10.0"})
+        have = set(self.call("GET", "/api/devices", token=tok)[1][0]["have"])
+        self.assertTrue({"vcredist-2015-x64", "dotnet-desktop-8", "vcredist-2010-x64"} <= have, have)
+        self.assertNotIn("vcredist-2015-x86", have)
+        self.assertNotIn("dotnet-desktop-9", have)
+
+    def test_uninstall_steps_carry_aliases_for_headless_removal(self):
+        tok = self.register("unin@b.co")
+        ag, did = self.enroll(tok, "pc")
+        self.call("POST", "/api/jobs", {"device_ids": [did], "steps": [{"type": "uninstall", "apps": ["qbittorrent"]}]}, tok)
+        step = ag.process_once()["steps"][0]
+        self.assertIn("qBittorrent", step["aliases"])
+
+    def test_icons_are_served(self):
+        with urllib.request.urlopen(self.base + "/icons/firefox.svg") as r:
+            self.assertEqual(r.headers["Content-Type"], "image/svg+xml")
+            self.assertIn(b"<svg", r.read())
+        with self.assertRaises(urllib.error.HTTPError):
+            urllib.request.urlopen(self.base + "/icons/..%2f..%2fserver.py")
+
     def test_info_is_not_lite(self):
         s, r = self.call("GET", "/api/info")
         self.assertEqual((s, r["lite"], r["home"]), (200, False, False))

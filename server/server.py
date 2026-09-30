@@ -14,7 +14,9 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import time
+import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -44,6 +46,8 @@ CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY, account_id INTEGER NOT N
   steps TEXT, status TEXT, log TEXT DEFAULT '', created REAL, started REAL, finished REAL,
   source TEXT DEFAULT 'manual', rollout_id TEXT, batch INTEGER DEFAULT 0, rollout_max_fail INTEGER DEFAULT 20);
 CREATE TABLE IF NOT EXISTS assignments(id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, tag TEXT, profile_id INTEGER, auto_update INTEGER DEFAULT 0);
+CREATE TABLE IF NOT EXISTS schedules(id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, tag TEXT, hour INTEGER, minute INTEGER,
+  days TEXT DEFAULT '[]', rollout INTEGER DEFAULT 1, last_run TEXT);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, account_id INTEGER, ts REAL, actor TEXT, action TEXT, detail TEXT);
 """
 # columns added after the first release: (table, column, definition)
@@ -156,7 +160,7 @@ def name_matches(have, alias):
     if h[len(a)] not in " (." and not h[len(a)].isdigit():
         return False
     rest = h[len(a):].strip()
-    return not rest or rest[0].isdigit() or rest[0] in "(." or (rest[0] == "v" and len(rest) > 1 and rest[1].isdigit())
+    return not rest or rest[0].isdigit() or rest[0] in "(.-" or (rest[0] == "v" and len(rest) > 1 and rest[1].isdigit())
 
 
 def app_state(app, manager, inv):
@@ -223,7 +227,7 @@ def resolve_step(step, device, catalog, scripts, profiles):
                 raise ApiError(400, f"unknown app: {k}")
             pkg = app.get(mgr)
             if pkg:
-                out.append({"type": kind, "app": app["name"], "pkg": pkg})
+                out.append({"type": kind, "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))})
             else:
                 out.append({"type": "skip", "app": app["name"], "reason": f"no {mgr or 'package manager'} package id"})
     elif kind == "script":
@@ -473,9 +477,13 @@ def h_audit(ctx, body):
 # ---------------------------------------------------------------- jobs
 def h_create_jobs(ctx, body):
     """body: {device_ids?:[..], tags?:[..], steps:[..], title?, rollout?:bool, max_failure_pct?:int}"""
+    return create_jobs(ctx.db, ctx.account, ctx.actor, body)
+
+
+def create_jobs(db, account, actor, body):
     (steps,) = need(body, "steps")
     devs = {}
-    for r in ctx.db.execute("SELECT * FROM devices WHERE account_id=?", (ctx.account,)):
+    for r in db.execute("SELECT * FROM devices WHERE account_id=?", (account,)):
         if r["id"] in (body.get("device_ids") or []) or dev_tags(r) & set(body.get("tags") or []):
             devs[r["id"]] = r
     missing = set(body.get("device_ids") or []) - set(devs)
@@ -483,9 +491,9 @@ def h_create_jobs(ctx, body):
         raise ApiError(404, f"device not found: {sorted(missing)}")
     if not devs:
         raise ApiError(400, "no matching devices")
-    catalog = full_catalog(ctx.db, ctx.account)
-    scripts = {r["id"]: dict(r) for r in ctx.db.execute("SELECT * FROM scripts WHERE account_id=?", (ctx.account,))}
-    profiles = {r["id"]: dict(r) for r in ctx.db.execute("SELECT * FROM profiles WHERE account_id=?", (ctx.account,))}
+    catalog = full_catalog(db, account)
+    scripts = {r["id"]: dict(r) for r in db.execute("SELECT * FROM scripts WHERE account_id=?", (account,))}
+    profiles = {r["id"]: dict(r) for r in db.execute("SELECT * FROM profiles WHERE account_id=?", (account,))}
     order = sorted(devs.values(), key=lambda d: (not is_online(d), d["id"]))  # online devices go first (canary)
     rollout = bool(body.get("rollout")) and len(order) > 1
     rid = secrets.token_hex(6) if rollout else None
@@ -500,11 +508,11 @@ def h_create_jobs(ctx, body):
         resolved = []
         for s in steps:
             resolved += resolve_step(s, dev, catalog, scripts, profiles)
-        cur = ctx.db.execute(
+        cur = db.execute(
             "INSERT INTO jobs(account_id,device_id,title,steps,status,created,rollout_id,batch,rollout_max_fail) VALUES(?,?,?,?,?,?,?,?,?)",
-            (ctx.account, dev["id"], title, json.dumps(resolved), "queued", time.time(), rid, batch_of[i] if rollout else 0, max_fail))
+            (account, dev["id"], title, json.dumps(resolved), "queued", time.time(), rid, batch_of[i] if rollout else 0, max_fail))
         ids.append(cur.lastrowid)
-    audit(ctx.db, ctx.account, ctx.actor, "job.create",
+    audit(db, account, actor, "job.create",
           f"{title} on {len(order)} device(s)" + (f", staged rollout {plan_batches(len(order))}" if rollout else ""))
     return {"job_ids": ids, "rollout_id": rid, "batches": plan_batches(len(order)) if rollout else None}
 
@@ -537,6 +545,76 @@ def evaluate_rollout(db, rid, max_fail, account):
                        (time.time(), rid)).rowcount
         if n:
             audit(db, account, "system", "rollout.halted", f"{rid}: {fin.count('failed')} failed, {n} job(s) not started")
+
+
+# ---------------------------------------------------------------- scheduled updates
+DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def h_list_schedules(ctx, body):
+    return [{"id": r["id"], "tag": r["tag"], "time": f"{r['hour']:02d}:{r['minute']:02d}", "days": json.loads(r["days"]),
+             "rollout": bool(r["rollout"])} for r in ctx.db.execute("SELECT * FROM schedules WHERE account_id=? ORDER BY id", (ctx.account,))]
+
+
+def h_add_schedule(ctx, body):
+    """Update everything on devices with <tag> (or 'all') at HH:MM server time, on the given weekdays (empty = daily)."""
+    tag, at = need(body, "tag", "time")
+    m = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", str(at))
+    if not m:
+        raise ApiError(400, "time must look like 03:00")
+    days = [str(d).lower() for d in (body.get("days") or [])]
+    if any(d not in DAYS for d in days):
+        raise ApiError(400, "days must be from: " + ", ".join(DAYS))
+    tag = str(tag).strip().lower()
+    if tag != "all":
+        clean_tags([tag])
+    cur = ctx.db.execute("INSERT INTO schedules(account_id,tag,hour,minute,days,rollout) VALUES(?,?,?,?,?,?)",
+                         (ctx.account, tag, int(m.group(1)), int(m.group(2)), json.dumps(days), int(body.get("rollout", True))))
+    audit(ctx.db, ctx.account, ctx.actor, "schedule.add", f"tag={tag} at {at} days={days or 'daily'}")
+    return {"id": cur.lastrowid}
+
+
+def h_del_schedule(ctx, body, sid):
+    ctx.db.execute("DELETE FROM schedules WHERE id=? AND account_id=?", (sid, ctx.account))
+    audit(ctx.db, ctx.account, ctx.actor, "schedule.delete", str(sid))
+    return {}
+
+
+def run_due_schedules(now=None):
+    """Start 'update everything' jobs for schedules whose time has come today. Safe to call often; each runs once a day.
+    A schedule still fires up to 6 hours late, so a short server outage doesn't skip a night's updates."""
+    now = now or datetime.datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    started = 0
+    db = connect()
+    try:
+        for sc in db.execute("SELECT * FROM schedules").fetchall():
+            due = now.replace(hour=sc["hour"], minute=sc["minute"], second=0, microsecond=0)
+            days = json.loads(sc["days"])
+            if sc["last_run"] == today or now < due or (now - due).total_seconds() > 6 * 3600:
+                continue
+            if days and DAYS[now.weekday()] not in days:
+                continue
+            db.execute("UPDATE schedules SET last_run=? WHERE id=?", (today, sc["id"]))
+            try:
+                create_jobs(db, sc["account_id"], "system", {"tags": [sc["tag"]], "steps": [{"type": "upgrade", "apps": "all"}],
+                                                             "title": "Scheduled update", "rollout": bool(sc["rollout"])})
+                started += 1
+            except ApiError:
+                pass  # no devices with that tag right now
+        db.commit()
+    finally:
+        db.close()
+    return started
+
+
+def scheduler_loop():
+    while True:
+        try:
+            run_due_schedules()
+        except Exception as e:  # noqa: BLE001
+            print("scheduler:", e)
+        time.sleep(30)
 
 
 # ---------------------------------------------------------------- agent-facing
@@ -611,6 +689,9 @@ ROUTES = [
     ("GET", r"/api/assignments", h_list_assignments, "user"),
     ("POST", r"/api/assignments", h_add_assignment, "user"),
     ("DELETE", r"/api/assignments/(\d+)", h_del_assignment, "user"),
+    ("GET", r"/api/schedules", h_list_schedules, "user"),
+    ("POST", r"/api/schedules", h_add_schedule, "user"),
+    ("DELETE", r"/api/schedules/(\d+)", h_del_schedule, "user"),
     ("GET", r"/api/audit", h_audit, "user"),
     ("POST", r"/api/jobs", h_create_jobs, "user"),
     ("GET", r"/api/jobs", h_jobs, "user"),
@@ -650,6 +731,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def dispatch(self, method):
         path, _, qs = self.path.partition("?")
+        if method == "GET" and re.fullmatch(r"/icons/[a-z0-9][a-z0-9._-]*\.svg", path):
+            f = ROOT / "web" / "icons" / path.rsplit("/", 1)[1]
+            if f.is_file():
+                data = f.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/svg+xml")
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                self.wfile.write(data)
+                return
         if method == "GET" and path in ("/", "/index.html"):
             data = (ROOT / "web" / "index.html").read_bytes()
             self.send_response(200)
@@ -727,6 +820,7 @@ def main():
     ap.add_argument("--no-registration", action="store_true", help="disallow new accounts (after you've made yours)")
     a = ap.parse_args()
     srv = make_server(a.host, a.port, a.db, not (a.no_registration or os.environ.get("OPENITE_NO_REGISTRATION")))
+    threading.Thread(target=scheduler_loop, daemon=True).start()
     print(f"Openite server running at http://{a.host}:{srv.server_address[1]}   (data: {STATE['db']})\nPress Ctrl+C to stop.")
     try:
         srv.serve_forever()

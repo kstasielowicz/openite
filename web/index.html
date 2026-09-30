@@ -35,13 +35,21 @@ textarea{width:100%;min-height:120px;font-family:ui-monospace,Consolas,monospace
 .app:hover{border-color:color-mix(in srgb,var(--acc) 50%,var(--line));transform:translateY(-1px);box-shadow:var(--sh)}
 .app.sel{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 9%,var(--card))}
 .app.sel::after{content:"✓";position:absolute;top:7px;right:9px;width:19px;height:19px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px;display:grid;place-items:center}
-.av{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:17px;flex:none}
+.av{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:17px;flex:none;overflow:hidden}
+.av.ico{background:#fff;border:1px solid var(--line)}.av img{width:26px;height:26px;display:block}
+.tray{display:flex;gap:6px;flex-wrap:wrap;max-height:84px;overflow-y:auto;margin-bottom:10px;padding-bottom:2px}
+.tchip{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;padding:3px 6px 3px 4px;border-radius:99px;background:color-mix(in srgb,var(--acc) 12%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 35%,var(--line));cursor:pointer}
+.tchip:hover{border-color:var(--bad)}.tchip .av{width:20px;height:20px;border-radius:6px;font-size:10px}.tchip .av img{width:13px;height:13px}.tchip b{font-weight:500}
+.tchip i{font-style:normal;color:var(--mute);margin-right:2px}
+.part{font-size:11px;opacity:.85;margin-left:4px}
+details.hw summary{cursor:pointer;font-weight:600}details.hw[open] summary{margin-bottom:8px}
+.adv-row{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
 .app .nm{font-weight:600;line-height:1.2}.app .st{font-size:12px;margin-top:2px;min-height:16px}
 .tag{font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
 .tag.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}.tag.up{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}.tag.bad{color:var(--bad)}
 .chip{font:inherit;font-size:13px;padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap}
 .chip:hover{border-color:var(--acc)}.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
-.cats{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin}
+.cats{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}.cats::-webkit-scrollbar{height:6px}.cats::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}.cats::-webkit-scrollbar-track{background:transparent}
 h2{margin:0 0 4px;font-size:18px}h3{margin:22px 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);display:flex;gap:8px;align-items:center}
 h3 span{font-weight:400;opacity:.7}
 pre{background:var(--bg);padding:12px;border-radius:9px;overflow:auto;max-height:340px;font-size:12px;white-space:pre-wrap;word-break:break-all;border:1px solid var(--line)}
@@ -63,7 +71,7 @@ const LS = {get: k => { try { return localStorage.getItem(k); } catch { return n
             set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }};
 const S = {token: LS.get('tok'), email: LS.get('email'), home: false, lite: false, adv: LS.get('adv') === '1', tab: 'install',
   devices: [], catalog: [], packs: [], scripts: [], profiles: [], assignments: [], jobs: [], audit: [],
-  selDevices: new Set(), selApps: new Set(), openJob: null, code: null, key: null, q: '', cat: 'All', msg: null, err: null, autoSel: false, rollout: true, ready: false};
+  schedules: [], hw: null, hwOpen: false, selDevices: new Set(), selApps: new Set(), openJob: null, code: null, key: null, q: '', cat: 'All', msg: null, err: null, autoSel: false, rollout: true, ready: false};
 const BASIC = ['install', 'devices', 'activity'], ADV = ['profiles', 'scripts', 'automation', 'audit'];
 const LABEL = {install: 'Install apps', devices: 'Devices', activity: 'Activity', profiles: 'Profiles', scripts: 'Scripts', automation: 'Auto-sync', audit: 'Audit log'};
 
@@ -90,16 +98,30 @@ async function api(method, path, body) {
 const ago = t => !t ? 'never' : (s => s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : Math.floor(s / 86400) + ' d ago')(Date.now() / 1000 - t);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const allTags = () => [...new Set(S.devices.flatMap(d => d.tags))].sort();
+const RANK = c => c === 'Runtimes & prerequisites' ? 2 : c === 'Drivers & hardware' ? 3 : 1;   // everyday apps first, plumbing last
+const sortCats = cs => [...cs].sort((a, b) => RANK(a) - RANK(b) || a.localeCompare(b));
+const badgeFor = a => a.key.startsWith('vcredist') ? 'C++' : a.key.startsWith('dotnet') ? '.NET' : a.key === 'directx' ? 'DX' : a.key === 'webview2' ? 'WV2'
+  : ['windows-terminal', 'powershell'].includes(a.key) ? '>_' : a.key === 'vscode' ? 'VS' : a.name[0].toUpperCase();
+// Brand icon from /icons/<key>.svg; falls back to a coloured letter tile when there is none.
+function appIcon(a, extra) {
+  const tile = h('div', {class: 'av ico' + (extra ? ' ' + extra : '')});
+  const fallback = () => { tile.className = 'av' + (extra ? ' ' + extra : ''); tile.replaceChildren(badgeFor(a));
+    tile.style.background = `linear-gradient(135deg,hsl(${hue(a.key)} 70% 52%),hsl(${(hue(a.key) + 40) % 360} 70% 42%))`;
+    if (badgeFor(a).length > 2) tile.style.fontSize = '12px'; };
+  tile.append(h('img', {src: '/icons/' + a.key + '.svg', alt: '', loading: 'lazy', onerror: fallback}));
+  return tile;
+}
 const hue = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
 
 function signOut() { LS.set('tok', null); LS.set('email', null); S.token = null; render(); }
 function setSession(r) { S.token = r.token; S.email = r.email; S.home = !!r.home; LS.set('tok', r.token); LS.set('email', r.email); }
 
 async function load() {
-  const need = ['devices', 'catalog', 'packs', 'jobs', 'profiles', ...(S.adv && !S.lite ? ['scripts', 'assignments', 'audit'] : [])];
+  const need = ['devices', 'catalog', 'packs', 'jobs', 'profiles', ...(S.adv && !S.lite ? ['scripts', 'assignments', 'audit', 'schedules'] : [])];
   const res = await Promise.all(need.map(p => api('GET', '/api/' + p)));
   need.forEach((p, i) => S[p] = res[i]);
   S.selDevices = new Set([...S.selDevices].filter(id => S.devices.some(d => d.id === id)));
+  if (S.lite && !S.hw) api('GET', '/api/hardware').then(h => { if (h.advice && h.advice.length) { S.hw = h; render(); } }).catch(() => {});
   if (!S.autoSel && S.devices.length === 1) { S.selDevices.add(S.devices[0].id); S.autoSel = true; }  // nothing to choose with one device
 }
 async function act(fn, okMsg) {
@@ -141,16 +163,16 @@ function startJob(steps, title, what) {
 }
 function installView() {
   const apps = [...S.selApps], q = S.q.toLowerCase();
-  const cats = [...new Set(S.catalog.map(a => a.category))].sort();
+  const cats = sortCats(new Set(S.catalog.map(a => a.category)));
   const selDevs = S.devices.filter(d => S.selDevices.has(d.id));
   const cards = [];
-  const shown = a => (S.cat === 'All' || a.category === S.cat) && (!q || (a.name + ' ' + a.key).toLowerCase().includes(q));
-  const sections = cats.filter(c => S.cat === 'All' || c === S.cat).map(c => {
-    const list = S.catalog.filter(a => a.category === c);
+  const shown = a => (S.cat === 'All' || S.cat === 'Selected' || a.category === S.cat) && (S.cat !== 'Selected' || S.selApps.has(a.key)) && (!q || (a.name + ' ' + a.key).toLowerCase().includes(q));
+  const sections = cats.filter(c => (S.cat === 'All' || S.cat === 'Selected' || c === S.cat) && (S.cat !== 'Selected' || S.catalog.some(a => a.category === c && S.selApps.has(a.key)))).map(c => {
+    const list = S.catalog.filter(a => a.category === c && (S.cat !== 'Selected' || S.selApps.has(a.key)));
     return h('section', {}, h('h3', {}, c, h('span', {}, list.length)), h('div', {class: 'grid'}, list.map(a => {
       const card = h('div', {class: 'app' + (S.selApps.has(a.key) ? ' sel' : ''), 'data-n': (a.name + ' ' + a.key).toLowerCase(), style: shown(a) ? '' : 'display:none',
         onclick: () => { S.selApps.has(a.key) ? S.selApps.delete(a.key) : S.selApps.add(a.key); render(); }},
-        h('div', {class: 'av', style: `background:linear-gradient(135deg,hsl(${hue(a.key)} 70% 52%),hsl(${(hue(a.key) + 40) % 360} 70% 42%))`}, a.name[0].toUpperCase()),
+        appIcon(a),
         h('div', {}, h('div', {class: 'nm'}, a.name, a.custom && h('span', {class: 'tag', style: 'margin-left:6px'}, 'custom')), h('div', {class: 'st'}, appStatus(a))));
       cards.push(card); return card;
     })));
@@ -165,12 +187,17 @@ function installView() {
       S.lite && d0 && h('div', {}, h('div', {class: 'mute', style: 'text-align:right;margin-bottom:6px'}, `${d0.n_installed} packages installed · ${nUp} update${nUp === 1 ? '' : 's'} available`),
         h('button', {class: 'b sec', onclick: () => startJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, '⟳ Update everything'))),
     h('div', {class: 'row', style: 'margin-bottom:12px'}, h('b', {}, 'Starter packs'),
-      S.packs.map(p => h('button', {class: 'chip' + (p.apps.every(a => S.selApps.has(a)) ? ' on' : ''), title: p.apps.join(', '), onclick: () => {
-        const all = p.apps.every(a => S.selApps.has(a)); p.apps.forEach(a => all ? S.selApps.delete(a) : S.selApps.add(a)); render(); }}, p.icon + ' ' + p.name)),
+      S.packs.map(p => { const av = p.apps.filter(k => S.catalog.some(a => a.key === k)), n = av.filter(k => S.selApps.has(k)).length;
+        if (!av.length) return null;
+        return h('button', {class: 'chip' + (n === av.length ? ' on' : ''), title: av.join(', '), onclick: () => {
+          av.forEach(a => n === av.length ? S.selApps.delete(a) : S.selApps.add(a)); render(); }}, p.icon + ' ' + p.name, n > 0 && n < av.length && h('span', {class: 'part'}, `${n}/${av.length}`)); }),
       h('span', {class: 'grow'}), search),
-    h('div', {class: 'cats'}, ['All', ...cats].map(c => h('button', {class: 'chip' + (S.cat === c ? ' on' : ''), onclick: () => { S.cat = c; render(); }}, c))),
+    h('div', {class: 'cats'}, ['All', ...(apps.length ? ['Selected'] : []), ...cats].map(c => h('button', {class: 'chip' + (S.cat === c ? ' on' : ''), onclick: () => { S.cat = c; render(); }}, c === 'Selected' ? `✔ Selected (${apps.length})` : c))),
+    S.lite && hardwareCard(),
     sections,
     h('div', {class: 'bar'},
+      apps.length > 0 && h('div', {class: 'tray'}, apps.map(k => { const a = S.catalog.find(x => x.key === k); if (!a) return null;
+        return h('span', {class: 'tchip', title: 'Click to remove', onclick: () => { S.selApps.delete(k); render(); }}, appIcon(a), h('b', {}, a.name), h('i', {}, '✕')); })),
       !S.lite && h('div', {class: 'row', style: 'margin-bottom:10px'}, h('b', {}, 'Install on'),
         S.devices.map(d => h('button', {class: 'chip' + (S.selDevices.has(d.id) ? ' on' : ''), onclick: () => { S.selDevices.has(d.id) ? S.selDevices.delete(d.id) : S.selDevices.add(d.id); render(); }}, (d.online ? '● ' : '○ ') + d.name)),
         S.devices.length > 1 && h('button', {class: 'chip', onclick: () => { S.selDevices = new Set(S.selDevices.size === S.devices.length ? [] : S.devices.map(d => d.id)); render(); }}, 'all / none')),
@@ -178,12 +205,22 @@ function installView() {
         h('button', {class: 'b big', disabled: !apps.length || !selDevs.length, onclick: () => startJob([{type: 'install', apps}], 'Install', 'Install')}, apps.length ? `Install ${plural(apps.length, 'app')}` : 'Select some apps'),
         h('button', {class: 'b sec', disabled: !apps.length || !selDevs.length, onclick: () => startJob([{type: 'upgrade', apps}], 'Update', 'Update')}, 'Update selected'),
         !S.lite && h('button', {class: 'b sec', disabled: !selDevs.length, onclick: () => startJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, 'Update everything'),
-        h('button', {class: 'b sec', disabled: !apps.length || !selDevs.length, onclick: () => confirm('Uninstall the selected apps?') && startJob([{type: 'uninstall', apps}], 'Uninstall', 'Uninstall')}, 'Uninstall'),
+        h('button', {class: 'b sec', disabled: !apps.length || !selDevs.length, onclick: () => confirm('Silently uninstall the selected apps? No windows will pop up.') && startJob([{type: 'uninstall', apps}], 'Uninstall', 'Uninstall')}, 'Uninstall'),
         h('span', {class: 'grow'}),
         !S.lite && apps.length > 0 && h('button', {class: 'b sec', onclick: () => { const n = prompt('Name this set of apps (reuse it on other devices):'); n && act(() => api('POST', '/api/profiles', {name: n, apps}), 'Saved profile "' + n + '".'); }}, 'Save as profile'),
         apps.length > 0 && h('button', {class: 'b sec', onclick: () => { S.selApps.clear(); render(); }}, 'Clear')),
       selDevs.length >= 4 && h('label', {class: 'mute', style: 'display:block;margin-top:8px'}, h('input', {type: 'checkbox', checked: S.rollout, onchange: e => S.rollout = e.target.checked}), ' Staged rollout: try a few devices first and stop if they fail')),
     S.adv && !S.lite && customAppForm());
+}
+function hardwareCard() {
+  if (!S.hw) return null;
+  return h('details', {class: 'card hw', open: S.hwOpen, ontoggle: e => { S.hwOpen = e.target.open; }},
+    h('summary', {}, '🧰 Recommended for this PC: drivers & tools (' + S.hw.advice.length + ')'),
+    h('p', {class: 'mute', style: 'margin:0 0 6px'}, [S.hw.hardware.maker, S.hw.hardware.model].filter(Boolean).join(' ') + (S.hw.hardware.gpus && S.hw.hardware.gpus.length ? ' · GPU: ' + S.hw.hardware.gpus.join(', ') : '') +
+      '. Openite never installs raw drivers: it installs the vendor\'s own update tool, or opens the official page.'),
+    S.hw.advice.map(a => h('div', {class: 'adv-row'}, h('div', {class: 'grow'}, h('b', {}, a.title), h('div', {class: 'mute'}, a.why)),
+      a.app_key ? (S.selApps.has(a.app_key) ? h('span', {class: 'tag ok'}, '✔ selected below') : h('button', {class: 'b sec', onclick: () => { S.selApps.add(a.app_key); render(); }}, 'Select'))
+                : h('button', {class: 'b sec', onclick: () => api('POST', '/api/drivers/open', {title: a.title}).catch(e => { S.err = e.message; render(); })}, 'Open official page'))));
 }
 function customAppForm() {
   const f = {}; const inp = (k, ph) => f[k] = h('input', {placeholder: ph, size: 14});
@@ -275,7 +312,21 @@ function automationView() {
         h('div', {class: 'row'}, 'Devices in', tag, 'should have', prof, h('label', {}, au, ' also keep them updated'),
           h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/assignments', {tag: tag.value, profile_id: +prof.value, auto_update: au.checked}), 'Rule added.')}, 'Add rule'))),
     S.assignments.map(a => h('div', {class: 'card row'}, h('span', {class: 'grow'}, 'Devices in ', h('b', {}, a.tag === 'all' ? 'all devices' : '#' + a.tag), ' keep ', h('b', {}, pname(a.profile_id)), a.auto_update ? ' installed and updated' : ' installed'),
-      h('button', {class: 'b sec', onclick: () => act(() => api('DELETE', '/api/assignments/' + a.id))}, 'Remove'))));
+      h('button', {class: 'b sec', onclick: () => act(() => api('DELETE', '/api/assignments/' + a.id))}, 'Remove'))),
+    schedulesCard());
+}
+function schedulesCard() {
+  const tag = h('select', {}, h('option', {value: 'all'}, 'all devices'), allTags().map(t => h('option', {value: t}, '#' + t)));
+  const time = h('input', {type: 'time', value: '03:00'});
+  const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const boxes = DAYS.map(d => h('label', {style: 'margin-right:6px'}, h('input', {type: 'checkbox', value: d}), ' ' + d));
+  const ro = h('input', {type: 'checkbox', checked: true});
+  return h('div', {}, h('div', {class: 'card'}, h('h2', {}, 'Scheduled updates'),
+    h('p', {class: 'mute'}, 'Update everything on a group of devices at a set time (server time). Leave all days unticked for every day. Groups of 4+ devices roll out in stages.'),
+    h('div', {class: 'row'}, 'Update', tag, 'at', time, boxes, h('label', {}, ro, ' staged rollout'),
+      h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/schedules', {tag: tag.value, time: time.value, days: boxes.map(b => b.firstChild).filter(i => i.checked).map(i => i.value), rollout: ro.checked}), 'Schedule added.')}, 'Add schedule'))),
+    S.schedules.map(x => h('div', {class: 'card row'}, h('span', {class: 'grow'}, 'Update ', h('b', {}, x.tag === 'all' ? 'all devices' : '#' + x.tag), ' at ', h('b', {}, x.time), x.days.length ? ' on ' + x.days.join(', ') : ' every day', x.rollout ? ' (staged)' : ''),
+      h('button', {class: 'b sec', onclick: () => act(() => api('DELETE', '/api/schedules/' + x.id))}, 'Remove'))));
 }
 function auditView() {
   return h('div', {}, h('p', {class: 'mute'}, 'Who did what, latest first.'),

@@ -32,6 +32,11 @@ func run(argv []string, env []string, timeout time.Duration) (int, string) {
 	if dryRun {
 		return 0, "[dry-run] " + strings.Join(argv, " ")
 	}
+	return probe(argv, env, timeout)
+}
+
+// probe always really executes: for read-only questions ("is this installed?") that must be answered even in dry-run.
+func probe(argv []string, env []string, timeout time.Duration) (int, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)

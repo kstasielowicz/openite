@@ -99,7 +99,7 @@ func NameMatches(have, alias string) bool {
 		return true
 	}
 	r := rest[0]
-	return isDigit(r) || r == '(' || r == '.' || (r == 'v' && len(rest) > 1 && isDigit(rest[1]))
+	return isDigit(r) || r == '(' || r == '.' || r == '-' || (r == 'v' && len(rest) > 1 && isDigit(rest[1]))
 }
 
 func hasFold(m map[string]string, id string) bool {
