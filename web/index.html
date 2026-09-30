@@ -1,92 +1,307 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Openite</title>
 <style>
-:root{--bg:#f3f5f9;--card:#fff;--fg:#182033;--mute:#6b7488;--line:#e2e6ee;--acc:#3b6cf6;--acc2:#7c5cf6;--ok:#12a150;--bad:#d92d3a;--warn:#c77700;--sh:0 1px 2px #1b25390d,0 4px 14px #1b25390a}
-@media(prefers-color-scheme:dark){:root{--bg:#0f131b;--card:#181e2a;--fg:#e8ebf3;--mute:#8b94a8;--line:#273042;--acc:#6b93ff;--acc2:#9b82ff;--ok:#3ddc97;--bad:#ff7a85;--warn:#ffc04d;--sh:0 1px 2px #0006,0 6px 20px #0004}}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--fg)}
-header{display:flex;gap:14px;align-items:center;padding:10px 24px;background:color-mix(in srgb,var(--card) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
-.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:18px;letter-spacing:-.01em}
-.logo i{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;color:#fff;font-style:normal;font-size:15px}
-nav{display:flex;gap:2px;flex:1;flex-wrap:wrap;margin-left:10px}
-nav button{background:none;border:0;padding:7px 13px;border-radius:8px;color:var(--mute);cursor:pointer;font:inherit;font-weight:500}
-nav button:hover{color:var(--fg);background:var(--bg)}nav button.on{background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc)}
-nav .sep{width:1px;background:var(--line);margin:6px 8px}
-main{max-width:1040px;margin:24px auto 40px;padding:0 20px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px;box-shadow:var(--sh)}
-button.b{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:0;border-radius:9px;padding:8px 16px;cursor:pointer;font:inherit;font-weight:600;transition:transform .08s,filter .15s}
-button.b:hover:not(:disabled){filter:brightness(1.08)}button.b:active:not(:disabled){transform:scale(.98)}
-button.b.sec{background:var(--card);color:var(--fg);border:1px solid var(--line);font-weight:500}button.b.sec:hover:not(:disabled){border-color:var(--acc);filter:none}
-button.b.big{padding:11px 26px;font-size:16px;border-radius:11px}
-button:disabled{opacity:.4;cursor:default}
-input,select,textarea{font:inherit;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:7px 11px;max-width:100%}
-input:focus,select:focus,textarea:focus{outline:2px solid color-mix(in srgb,var(--acc) 45%,transparent);border-color:var(--acc)}
-textarea{width:100%;min-height:120px;font-family:ui-monospace,Consolas,monospace}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.grow{flex:1}
-.mute{color:var(--mute)}.dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:var(--mute);flex:none}.dot.on{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}
-.hero{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 12%,var(--card)),color-mix(in srgb,var(--acc2) 10%,var(--card)));display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-.hero h2{margin:0 0 2px;font-size:20px;letter-spacing:-.01em}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:10px}
-.app{border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:11px 12px;display:flex;gap:11px;align-items:center;cursor:pointer;user-select:none;position:relative;transition:border-color .12s,transform .12s,box-shadow .12s}
-.app:hover{border-color:color-mix(in srgb,var(--acc) 50%,var(--line));transform:translateY(-1px);box-shadow:var(--sh)}
-.app.sel{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 9%,var(--card))}
-.app.sel::after{content:"✓";position:absolute;top:7px;right:9px;width:19px;height:19px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px;display:grid;place-items:center}
-.av{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:17px;flex:none;overflow:hidden}
-.av.ico{background:#fff;border:1px solid var(--line)}.av img{width:26px;height:26px;display:block}
-.tray{display:flex;gap:6px;flex-wrap:wrap;max-height:84px;overflow-y:auto;margin-bottom:10px;padding-bottom:2px}
-.tchip{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;padding:3px 6px 3px 4px;border-radius:99px;background:color-mix(in srgb,var(--acc) 12%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 35%,var(--line));cursor:pointer}
-.tchip:hover{border-color:var(--bad)}.tchip .av{width:20px;height:20px;border-radius:6px;font-size:10px}.tchip .av img{width:13px;height:13px}.tchip b{font-weight:500}
-.tchip i{font-style:normal;color:var(--mute);margin-right:2px}
-.part{font-size:11px;opacity:.85;margin-left:4px}
-details.hw summary{cursor:pointer;font-weight:600}details.hw[open] summary{margin-bottom:8px}
-.adv-row{display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);flex-wrap:wrap}
-.app .nm{font-weight:600;line-height:1.2}.app .st{font-size:12px;margin-top:2px;min-height:16px}
-.tag{font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
-.tag.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,var(--line))}.tag.up{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,var(--line))}.tag.bad{color:var(--bad)}
-.chip{font:inherit;font-size:13px;padding:5px 12px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer;white-space:nowrap}
-.chip:hover{border-color:var(--acc)}.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
-.cats{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}.cats::-webkit-scrollbar{height:6px}.cats::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}.cats::-webkit-scrollbar-track{background:transparent}
-h2{margin:0 0 4px;font-size:18px}h3{margin:22px 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);display:flex;gap:8px;align-items:center}
-h3 span{font-weight:400;opacity:.7}
-pre{background:var(--bg);padding:12px;border-radius:9px;overflow:auto;max-height:340px;font-size:12px;white-space:pre-wrap;word-break:break-all;border:1px solid var(--line)}
-.bar{position:sticky;bottom:14px;background:color-mix(in srgb,var(--card) 92%,transparent);backdrop-filter:blur(10px);border:1px solid color-mix(in srgb,var(--acc) 50%,var(--line));border-radius:16px;padding:13px 16px;box-shadow:0 10px 34px #0003;margin-top:18px}
-.st-done{color:var(--ok)}.st-failed,.st-halted{color:var(--bad)}.st-running{color:var(--warn)}
-.spin{width:12px;height:12px;border-radius:50%;border:2px solid var(--warn);border-top-color:transparent;display:inline-block;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:5px}@keyframes sp{to{transform:rotate(360deg)}}
-.err,.ok-msg{padding:10px 14px;border-radius:10px;margin-bottom:14px;font-weight:500}
-.err{background:color-mix(in srgb,var(--bad) 13%,var(--card));color:var(--bad)}.ok-msg{background:color-mix(in srgb,var(--ok) 13%,var(--card));color:var(--ok)}
-.steps{display:flex;gap:20px;flex-wrap:wrap;color:var(--mute);margin:8px 0 0}.steps b{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;font-size:12px;margin-right:6px}
-table{width:100%;border-collapse:collapse;font-size:13px}td,th{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line)}
-code{background:var(--bg);padding:1px 6px;border-radius:5px;font-size:13px}
-@media(max-width:640px){header{padding:8px 12px}main{padding:0 12px}}
+/* ------------------------------------------------------------------ design tokens */
+:root{
+  color-scheme:light;
+  --bg:#f5f6f8;--panel:#fff;--panel2:#fafbfc;--hover:#f0f2f5;--line:#e3e6eb;--line2:#edeff3;
+  --text:#151a23;--text2:#485163;--text3:#7a8394;
+  --accent:#2d63e8;--accent-weak:#e9effd;--accent-text:#1f4fcf;
+  --ok:#15803d;--ok-weak:#e6f4ea;--warn:#a15c07;--warn-weak:#fdf1dc;--bad:#c42b2b;--bad-weak:#fbe9e9;
+  --shadow:0 1px 2px rgba(16,24,40,.04);--pop:0 14px 40px rgba(16,24,40,.16);--scrim:rgba(14,18,26,.42);
+  --r:8px;--rs:6px;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,"Liberation Mono",monospace;
+}
+[data-theme=dark]{
+  color-scheme:dark;
+  --bg:#0d0f13;--panel:#14171c;--panel2:#171a20;--hover:#1c2027;--line:#262b33;--line2:#1e2228;
+  --text:#e9ebef;--text2:#a4acb9;--text3:#7a8494;
+  --accent:#6b93ff;--accent-weak:#18233f;--accent-text:#a3bcff;
+  --ok:#46c77e;--ok-weak:#10271a;--warn:#f0b454;--warn-weak:#2b2310;--bad:#ff7b7b;--bad-weak:#2d1717;
+  --shadow:none;--pop:0 14px 40px rgba(0,0,0,.55);--scrim:rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--accent-text)}
+h1,h2,h3,p{margin:0}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+::selection{background:var(--accent-weak)}
+.ic{display:inline-flex;vertical-align:middle;flex:none}.ic svg{display:block}
+input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;margin:0;cursor:pointer;flex:none}
+.hidden{display:none!important}
+.muted{color:var(--text3)}.sec{color:var(--text2)}
+
+/* ------------------------------------------------------------------ layout */
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:14px 10px;background:var(--panel);border-right:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;padding:4px 8px 12px;font-weight:650;font-size:15px;letter-spacing:-.01em;color:var(--text)}
+.brand svg{color:var(--accent)}
+.brand small{font-weight:500;color:var(--text3);font-size:11px;margin-left:auto}
+.nav{display:flex;flex-direction:column;gap:1px;overflow-y:auto}
+.nav h6{margin:14px 0 4px;padding:0 10px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+.nav a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:var(--rs);color:var(--text2);text-decoration:none;font-weight:500}
+.nav a:hover{background:var(--hover);color:var(--text)}
+.nav a.on{background:var(--accent-weak);color:var(--accent-text)}
+.nav a .n{margin-left:auto;font-size:11px;color:var(--text3);font-weight:600}
+.nav a.on .n{color:var(--accent-text)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line2)}
+.syncchip{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rs);color:var(--text3);font-size:12.5px}
+.syncchip button{margin-left:auto}
+.acct{display:flex;align-items:center;gap:8px;padding:2px 4px;font-size:12.5px;color:var(--text2)}
+.acct span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+main{min-width:0}
+.top{display:flex;align-items:flex-end;gap:16px;padding:24px 32px 16px}
+.top h1{font-size:21px;font-weight:650;letter-spacing:-.018em;line-height:1.2}
+.top .sub{margin-top:3px;color:var(--text3)}
+.top .actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+.content{padding:0 32px 48px;max-width:1320px}
+.crumb{display:flex;align-items:center;gap:6px;color:var(--text3);margin-bottom:4px;font-size:13px}
+.crumb a{color:var(--text3);text-decoration:none}.crumb a:hover{color:var(--text)}
+
+/* ------------------------------------------------------------------ primitives */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.panel+.panel{margin-top:16px}
+.ph{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line2)}
+.ph h3{font-size:13.5px;font-weight:600}.ph .sub{color:var(--text3);font-size:12.5px}.ph .r{margin-left:auto;display:flex;gap:8px;align-items:center}
+.pb{padding:16px}.pb.flush{padding:0}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.grid2>.panel+.panel{margin-top:0}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.stack{display:flex;flex-direction:column;gap:16px}.stack>.panel+.panel{margin-top:0}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.grow{flex:1;min-width:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:32px;padding:0 12px;border-radius:var(--rs);border:1px solid var(--line);background:var(--panel);color:var(--text);font-weight:550;cursor:pointer;white-space:nowrap;transition:background .12s,border-color .12s}
+.btn:hover:not(:disabled){background:var(--hover);border-color:var(--text3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover:not(:disabled){background:var(--accent);filter:brightness(1.08);border-color:var(--accent)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--text2)}
+.btn.ghost:hover:not(:disabled){background:var(--hover);border-color:transparent;color:var(--text)}
+.btn.danger{color:var(--bad)}.btn.danger:hover:not(:disabled){background:var(--bad-weak);border-color:var(--bad)}
+.btn.lg{height:38px;padding:0 16px;font-size:14px}
+.btn.sm{height:26px;padding:0 8px;font-size:12.5px}
+.btn.icon{width:32px;padding:0}.btn.icon.sm{width:26px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.block{width:100%}
+.input,.select,.textarea{height:32px;padding:0 10px;background:var(--panel);border:1px solid var(--line);border-radius:var(--rs);width:100%;min-width:0}
+.textarea{height:auto;padding:8px 10px;font-family:var(--mono);font-size:12.5px;line-height:1.5;resize:vertical}
+.input:focus,.select:focus,.textarea:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%,transparent);border-color:var(--accent)}
+.input::placeholder{color:var(--text3)}
+.search{position:relative;display:flex;align-items:center}
+.search .ic{position:absolute;left:10px;color:var(--text3)}
+.search .input{padding-left:32px;width:260px}
+.search kbd{position:absolute;right:8px;font:11px var(--mono);color:var(--text3);border:1px solid var(--line);border-radius:4px;padding:0 5px;background:var(--panel2)}
+.seg{display:inline-flex;padding:2px;background:var(--hover);border-radius:var(--rs);gap:2px}
+.seg button{height:26px;padding:0 10px;border:0;border-radius:4px;background:transparent;color:var(--text2);font-weight:550;cursor:pointer}
+.seg button.on{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgba(16,24,40,.1)}
+.seg button .n{margin-left:5px;color:var(--text3);font-weight:500}
+.badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 7px;border-radius:99px;font-size:12px;font-weight:550;background:var(--hover);color:var(--text2);white-space:nowrap}
+.badge.ok{background:var(--ok-weak);color:var(--ok)}.badge.warn{background:var(--warn-weak);color:var(--warn)}
+.badge.bad{background:var(--bad-weak);color:var(--bad)}.badge.info{background:var(--accent-weak);color:var(--accent-text)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex:none;display:inline-block}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}.dot.info{background:var(--accent)}
+.dot.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+.tag{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:4px;border:1px solid var(--line);font-size:12px;color:var(--text2);background:var(--panel2)}
+.tags{display:flex;gap:4px;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:132px minmax(0,1fr);gap:0}
+.kv>div{padding:9px 0;border-bottom:1px solid var(--line2);min-width:0;overflow-wrap:anywhere}
+.kv>div:nth-child(odd){color:var(--text3)}
+.kv>div:nth-last-child(-n+2){border-bottom:0}
+.bar{height:6px;background:var(--hover);border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);border-radius:9px}
+.bar.warn i{background:var(--warn)}.bar.bad i{background:var(--bad)}.bar.ok i{background:var(--ok)}
+.empty{padding:40px 20px;text-align:center;color:var(--text3)}
+.empty h3{color:var(--text);font-size:15px;margin-bottom:4px}
+.empty .btn{margin-top:14px}
+.spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:sp .8s linear infinite;display:inline-block;flex:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+.skel{background:linear-gradient(90deg,var(--hover),var(--line2),var(--hover));background-size:200% 100%;animation:sh 1.3s linear infinite;border-radius:var(--rs)}
+@keyframes sh{to{background-position:-200% 0}}
+
+/* ------------------------------------------------------------------ tables */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{position:sticky;top:0;text-align:left;font-size:12px;font-weight:600;color:var(--text3);padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel2);white-space:nowrap}
+.tbl td{padding:10px 14px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tbody tr.click{cursor:pointer}.tbl tbody tr.click:hover{background:var(--hover)}
+.tbl .c{width:34px;padding-right:0}
+.tbl .r{text-align:right}
+.name{font-weight:600}
+.tbl-wrap{overflow:auto}
+
+/* ------------------------------------------------------------------ apps page */
+.apps{display:grid;grid-template-columns:minmax(0,1fr) 332px;gap:24px;align-items:start}
+.apps>*{min-width:0}
+.selpanel .togg{display:none}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.presets{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 12px;margin:0 -2px 6px;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.presets::-webkit-scrollbar{height:6px}.presets::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}.presets::-webkit-scrollbar-track{background:transparent}
+.preset{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:9px 14px 9px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);cursor:pointer;text-align:left;min-width:186px}
+.preset:hover{border-color:var(--text3)}
+.preset.on{border-color:var(--accent);background:var(--accent-weak)}
+.preset .pi{width:32px;height:32px;border-radius:7px;display:grid;place-items:center;background:var(--hover);color:var(--text2)}
+.preset.on .pi{background:var(--accent);color:#fff}
+.preset b{display:block;font-weight:600;line-height:1.2}.preset small{color:var(--text3);font-size:12px}
+.cat{display:flex;align-items:center;gap:8px;margin:22px 0 10px;font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3)}
+.cat:first-child{margin-top:4px}.cat span{font-weight:500;letter-spacing:0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:10px}
+.card{position:relative;display:flex;align-items:center;gap:11px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;user-select:none;min-height:58px;transition:border-color .12s,background .12s}
+.card:hover{border-color:var(--text3)}
+.card.sel{border-color:var(--accent);background:var(--accent-weak)}
+.card .mt{min-width:0;flex:1}
+.card .nm{font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .sb{font-size:12px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:6px;align-items:center}
+.card .sb .up{color:var(--warn);font-weight:600}.card .sb .in{color:var(--ok)}
+.card .tick{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;color:transparent;flex:none}
+.card:hover .tick{border-color:var(--text3)}
+.card.sel .tick{background:var(--accent);border-color:var(--accent);color:#fff}
+.card .more{position:absolute;right:8px;top:6px;opacity:0}.card:hover .more,.card:focus-within .more{opacity:1}
+.card.sel .more{display:none}
+.tile{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;flex:none;overflow:hidden;background:#fff;border:1px solid var(--line);color:#fff;font-weight:700;font-size:15px}
+.tile.fb{border:0}
+.tile img{width:22px;height:22px;display:block}
+.tile.s{width:26px;height:26px;border-radius:7px;font-size:12px}.tile.s img{width:16px;height:16px}
+.tile.l{width:48px;height:48px;border-radius:12px;font-size:19px}.tile.l img{width:30px;height:30px}
+.selpanel{position:sticky;top:16px;max-height:calc(100vh - 32px);display:flex;flex-direction:column}
+.selpanel .list{overflow-y:auto;min-height:0;max-height:38vh}
+.selrow{display:flex;align-items:center;gap:10px;padding:7px 16px}
+.selrow:hover{background:var(--hover)}
+.selrow .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:550}
+.selrow .ver{font:12px var(--mono);color:var(--accent-text);background:var(--accent-weak);border-radius:4px;padding:0 6px;cursor:pointer}
+.selpanel .acts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.note{font-size:12px;color:var(--text3);line-height:1.45}
+
+/* ------------------------------------------------------------------ stats / overview */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.stat{padding:16px}
+.stat .l{color:var(--text3);font-size:12.5px;font-weight:550}
+.stat .v{font-size:28px;font-weight:650;letter-spacing:-.02em;line-height:1.15;margin-top:6px}
+.stat .v small{font-size:14px;color:var(--text3);font-weight:500;margin-left:2px}
+.stat .d{margin-top:2px;font-size:12.5px;color:var(--text3)}
+.list-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line2)}
+.list-row:last-child{border-bottom:0}
+.hbar{display:grid;grid-template-columns:140px minmax(0,1fr) 34px;gap:12px;align-items:center;padding:7px 16px}
+.hbar .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hbar .ct{text-align:right;color:var(--text3)}
+
+/* ------------------------------------------------------------------ tabs, drawer, modal, toast */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 18px}
+.tabs a{padding:9px 14px;color:var(--text2);text-decoration:none;font-weight:550;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer}
+.tabs a:hover{color:var(--text)}.tabs a.on{color:var(--accent-text);border-color:var(--accent)}
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:40;animation:fade .14s ease-out}
+@keyframes fade{from{opacity:0}}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:100vw;background:var(--panel);border-left:1px solid var(--line);box-shadow:var(--pop);z-index:41;display:flex;flex-direction:column;animation:slide .18s ease-out}
+@keyframes slide{from{transform:translateX(28px)}}
+.drawer .dh{display:flex;gap:14px;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line2)}
+.drawer .db{padding:18px 20px;overflow-y:auto;flex:1}
+.drawer h4{font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);margin:22px 0 8px}
+.drawer h4:first-child{margin-top:0}
+.modal-wrap{position:fixed;inset:0;display:grid;place-items:center;z-index:50;padding:20px}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--pop);max-width:100%;max-height:calc(100vh - 40px);display:flex;flex-direction:column;animation:pop .14s ease-out}
+@keyframes pop{from{transform:translateY(6px) scale(.985)}}
+.modal .mh{display:flex;align-items:center;padding:16px 20px 4px}.modal .mh h2{font-size:16px;font-weight:650;flex:1}
+.modal .mb{padding:10px 20px 18px;overflow-y:auto}
+.modal .mf{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px;border-top:1px solid var(--line2)}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}.field>label{font-weight:550;font-size:13px}.field .hint{font-size:12px;color:var(--text3)}
+.codebox{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:var(--rs);padding:10px 44px 10px 12px;font:12.5px/1.55 var(--mono);white-space:pre-wrap;word-break:break-all}
+.codebox .btn{position:absolute;right:6px;top:6px}
+.toasts{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.toast{display:flex;align-items:center;gap:10px;min-width:260px;max-width:420px;padding:11px 14px;background:var(--text);color:var(--bg);border-radius:var(--r);box-shadow:var(--pop);animation:pop .16s ease-out}
+.toast.err{background:var(--bad);color:#fff}
+.toast a,.toast button{color:inherit;font-weight:650;margin-left:auto;background:none;border:0;cursor:pointer;text-decoration:underline;padding:0}
+.log{background:var(--panel2);border:1px solid var(--line2);border-radius:var(--rs);padding:12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;max-height:360px;overflow:auto;color:var(--text2)}
+.job{border-bottom:1px solid var(--line2)}.job:last-child{border-bottom:0}
+.job .jh{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer}.job .jh:hover{background:var(--hover)}
+.job .jb{padding:0 16px 16px}
+
+/* ------------------------------------------------------------------ splash (shown while the PC is being read) */
+.splash{min-height:100vh;display:grid;place-items:center;padding:24px}
+.splash .box{width:340px;text-align:left}
+.splash .lg{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+.splash .mark{position:relative;width:52px;height:52px;display:grid;place-items:center;color:var(--accent)}
+.splash .mark.still::before{animation:none;border-color:var(--line)}
+.splash .mark::before{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:sp 1.1s cubic-bezier(.5,.1,.5,.9) infinite}
+.splash h1{font-size:22px;font-weight:650;letter-spacing:-.02em}
+.splash p{color:var(--text3);margin-top:2px}
+.splash ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.splash li{display:flex;align-items:center;gap:10px;color:var(--text2);animation:pop .22s ease-out}
+.splash li.done{color:var(--text3)}.splash li .ok{color:var(--ok)}
+
+@media(max-width:1180px){.apps{grid-template-columns:minmax(0,1fr)}.selpanel{position:sticky;bottom:12px;top:auto;max-height:none;z-index:5;box-shadow:var(--pop)}.selpanel .list{max-height:24vh}
+  .selpanel .togg{display:inline-flex}.selpanel:not(.open) .list,.selpanel:not(.open) .sel-dev,.selpanel:not(.open) .sel-more{display:none}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:8px 12px;border-right:0;border-bottom:1px solid var(--line)}
+  .nav{flex-direction:row;flex-wrap:wrap}.nav h6{display:none}.side-foot{margin:0 0 0 auto;border:0;padding:0;flex-direction:row}
+  .top,.content{padding-left:16px;padding-right:16px}.grid2,.grid3{grid-template-columns:1fr}.kv{grid-template-columns:110px 1fr}.search .input{width:100%}
+}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}}
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <div class="splash"><div class="box">
+    <div class="lg"><div class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+      <div><h1>Openite</h1><p id="splash-msg">Starting…</p></div></div>
+    <ul id="splash-steps"></ul>
+  </div></div>
+</div>
+<div id="overlay"></div>
+<div class="toasts" id="toasts"></div>
+
 <script>
+/*ICONS-START*/const ICONS = {"activity":"<path d=\"M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2\" />","alert":"<path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\" /> <path d=\"M12 9v4\" /> <path d=\"M12 17h.01\" />","apps":"<rect width=\"7\" height=\"7\" x=\"3\" y=\"3\" rx=\"1\" /> <rect width=\"7\" height=\"7\" x=\"14\" y=\"3\" rx=\"1\" /> <rect width=\"7\" height=\"7\" x=\"14\" y=\"14\" rx=\"1\" /> <rect width=\"7\" height=\"7\" x=\"3\" y=\"14\" rx=\"1\" />","arrow-up":"<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"m16 12-4-4-4 4\" /> <path d=\"M12 16V8\" />","board":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M11 9h4a2 2 0 0 0 2-2V3\" /> <circle cx=\"9\" cy=\"9\" r=\"2\" /> <path d=\"M7 21v-4a2 2 0 0 1 2-2h4\" /> <circle cx=\"15\" cy=\"15\" r=\"2\" />","book":"<path d=\"M12 7v14\" /> <path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\" />","box":"<path d=\"m16 16 2 2 4-4\" /> <path d=\"M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14\" /> <path d=\"m7.5 4.27 9 5.15\" /> <polyline points=\"3.29 7 12 12 20.71 7\" /> <line x1=\"12\" x2=\"12\" y1=\"22\" y2=\"12\" />","calendar":"<path d=\"M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5\" /> <path d=\"M16 2v4\" /> <path d=\"M8 2v4\" /> <path d=\"M3 10h5\" /> <path d=\"M17.5 17.5 16 16.3V14\" /> <circle cx=\"16\" cy=\"16\" r=\"6\" />","check":"<path d=\"M20 6 9 17l-5-5\" />","chevron-down":"<path d=\"m6 9 6 6 6-6\" />","chevron-left":"<path d=\"m15 18-6-6 6-6\" />","chevron-right":"<path d=\"m9 18 6-6-6-6\" />","clock":"<circle cx=\"12\" cy=\"12\" r=\"10\" /> <polyline points=\"12 6 12 12 16 14\" />","cloud":"<path d=\"M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z\" />","code":"<path d=\"m18 16 4-4-4-4\" /> <path d=\"m6 8-4 4 4 4\" /> <path d=\"m14.5 4-5 16\" />","copy":"<rect width=\"14\" height=\"14\" x=\"8\" y=\"8\" rx=\"2\" ry=\"2\" /> <path d=\"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2\" />","cpu":"<rect width=\"16\" height=\"16\" x=\"4\" y=\"4\" rx=\"2\" /> <rect width=\"6\" height=\"6\" x=\"9\" y=\"9\" rx=\"1\" /> <path d=\"M15 2v2\" /> <path d=\"M15 20v2\" /> <path d=\"M2 15h2\" /> <path d=\"M2 9h2\" /> <path d=\"M20 15h2\" /> <path d=\"M20 9h2\" /> <path d=\"M9 2v2\" /> <path d=\"M9 20v2\" />","disk":"<line x1=\"22\" x2=\"2\" y1=\"12\" y2=\"12\" /> <path d=\"M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z\" /> <line x1=\"6\" x2=\"6.01\" y1=\"16\" y2=\"16\" /> <line x1=\"10\" x2=\"10.01\" y1=\"16\" y2=\"16\" />","download":"<path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" /> <polyline points=\"7 10 12 15 17 10\" /> <line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\" />","edit":"<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /> <path d=\"m15 5 4 4\" />","external":"<path d=\"M15 3h6v6\" /> <path d=\"M10 14 21 3\" /> <path d=\"M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6\" />","eye":"<path d=\"M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />","fail":"<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"m15 9-6 6\" /> <path d=\"m9 9 6 6\" />","filter":"<path d=\"M3 6h18\" /> <path d=\"M7 12h10\" /> <path d=\"M10 18h4\" />","gamepad":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\" /> <line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\" /> <line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\" /> <line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\" /> <path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\" />","globe":"<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20\" /> <path d=\"M2 12h20\" />","history":"<path d=\"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8\" /> <path d=\"M3 3v5h5\" /> <path d=\"M12 7v5l4 2\" />","home":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /> <path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />","info":"<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M12 16v-4\" /> <path d=\"M12 8h.01\" />","key":"<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\" /> <circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\" />","laptop":"<path d=\"M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16\" />","layers":"<path d=\"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\" /> <path d=\"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\" /> <path d=\"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\" />","list":"<path d=\"m3 17 2 2 4-4\" /> <path d=\"m3 7 2 2 4-4\" /> <path d=\"M13 6h8\" /> <path d=\"M13 12h8\" /> <path d=\"M13 18h8\" />","loader":"<path d=\"M21 12a9 9 0 1 1-6.219-8.56\" />","lock":"<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\" /> <path d=\"M7 11V7a5 5 0 0 1 10 0v4\" />","log":"<path d=\"M15 12h-5\" /> <path d=\"M15 8h-5\" /> <path d=\"M19 17V5a2 2 0 0 0-2-2H4\" /> <path d=\"M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3\" />","logout":"<path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\" /> <polyline points=\"16 17 21 12 16 7\" /> <line x1=\"21\" x2=\"9\" y1=\"12\" y2=\"12\" />","memory":"<path d=\"M6 19v-3\" /> <path d=\"M10 19v-3\" /> <path d=\"M14 19v-3\" /> <path d=\"M18 19v-3\" /> <path d=\"M8 11V9\" /> <path d=\"M16 11V9\" /> <path d=\"M12 11V9\" /> <path d=\"M2 15h20\" /> <path d=\"M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z\" />","menu":"<line x1=\"4\" x2=\"20\" y1=\"12\" y2=\"12\" /> <line x1=\"4\" x2=\"20\" y1=\"6\" y2=\"6\" /> <line x1=\"4\" x2=\"20\" y1=\"18\" y2=\"18\" />","minus":"<path d=\"M5 12h14\" />","monitor":"<rect width=\"20\" height=\"14\" x=\"2\" y=\"3\" rx=\"2\" /> <line x1=\"8\" x2=\"16\" y1=\"21\" y2=\"21\" /> <line x1=\"12\" x2=\"12\" y1=\"17\" y2=\"21\" />","moon":"<path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\" />","more":"<circle cx=\"12\" cy=\"12\" r=\"1\" /> <circle cx=\"19\" cy=\"12\" r=\"1\" /> <circle cx=\"5\" cy=\"12\" r=\"1\" />","network":"<rect x=\"16\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\" /> <rect x=\"2\" y=\"16\" width=\"6\" height=\"6\" rx=\"1\" /> <rect x=\"9\" y=\"2\" width=\"6\" height=\"6\" rx=\"1\" /> <path d=\"M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3\" /> <path d=\"M12 12V8\" />","ok":"<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"m9 12 2 2 4-4\" />","overview":"<rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\" /> <rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\" /> <rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\" /> <rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\" />","package":"<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\" /> <path d=\"M12 22V12\" /> <path d=\"m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7\" /> <path d=\"m7.5 4.27 9 5.15\" />","palette":"<circle cx=\"13.5\" cy=\"6.5\" r=\".5\" fill=\"currentColor\" /> <circle cx=\"17.5\" cy=\"10.5\" r=\".5\" fill=\"currentColor\" /> <circle cx=\"8.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\" /> <circle cx=\"6.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\" /> <path d=\"M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z\" />","panel":"<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M15 3v18\" /> <path d=\"m10 15-3-3 3-3\" />","pause":"<rect x=\"14\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" /> <rect x=\"6\" y=\"4\" width=\"4\" height=\"16\" rx=\"1\" />","play":"<polygon points=\"6 3 20 12 6 21 6 3\" />","plus":"<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />","puzzle":"<path d=\"M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z\" />","rocket":"<path d=\"M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z\" /> <path d=\"m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z\" /> <path d=\"M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0\" /> <path d=\"M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5\" />","search":"<circle cx=\"11\" cy=\"11\" r=\"8\" /> <path d=\"m21 21-4.3-4.3\" />","server":"<rect width=\"20\" height=\"8\" x=\"2\" y=\"2\" rx=\"2\" ry=\"2\" /> <rect width=\"20\" height=\"8\" x=\"2\" y=\"14\" rx=\"2\" ry=\"2\" /> <line x1=\"6\" x2=\"6.01\" y1=\"6\" y2=\"6\" /> <line x1=\"6\" x2=\"6.01\" y1=\"18\" y2=\"18\" />","settings":"<path d=\"M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z\" /> <circle cx=\"12\" cy=\"12\" r=\"3\" />","shield":"<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" /> <path d=\"m9 12 2 2 4-4\" />","star":"<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" />","sun":"<circle cx=\"12\" cy=\"12\" r=\"4\" /> <path d=\"M12 2v2\" /> <path d=\"M12 20v2\" /> <path d=\"m4.93 4.93 1.41 1.41\" /> <path d=\"m17.66 17.66 1.41 1.41\" /> <path d=\"M2 12h2\" /> <path d=\"M20 12h2\" /> <path d=\"m6.34 17.66-1.41 1.41\" /> <path d=\"m19.07 4.93-1.41 1.41\" />","sync":"<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" /> <path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\" /> <path d=\"M8 16H3v5\" />","tag":"<path d=\"M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z\" /> <circle cx=\"7.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\" />","terminal":"<path d=\"m7 11 2-2-2-2\" /> <path d=\"M11 13h4\" /> <rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" />","trash":"<path d=\"M3 6h18\" /> <path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\" /> <path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\" /> <line x1=\"10\" x2=\"10\" y1=\"11\" y2=\"17\" /> <line x1=\"14\" x2=\"14\" y1=\"11\" y2=\"17\" />","undo":"<path d=\"M9 14 4 9l5-5\" /> <path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\" />","uptime":"<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /> <line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /> <circle cx=\"12\" cy=\"14\" r=\"8\" />","user":"<path d=\"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2\" /> <circle cx=\"12\" cy=\"7\" r=\"4\" />","wifi":"<path d=\"M12 20h.01\" /> <path d=\"M2 8.82a15 15 0 0 1 20 0\" /> <path d=\"M5 12.859a10 10 0 0 1 14 0\" /> <path d=\"M8.5 16.429a5 5 0 0 1 7 0\" />","wrench":"<path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z\" />","x":"<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />"};/*ICONS-END*/
+</script>
+<script>
+// =====================================================================================================
+//  core: helpers, api, state
+// =====================================================================================================
 const LS = {get: k => { try { return localStorage.getItem(k); } catch { return null; } },
             set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }};
-const S = {token: LS.get('tok'), email: LS.get('email'), home: false, lite: false, adv: LS.get('adv') === '1', tab: 'install',
-  devices: [], catalog: [], packs: [], scripts: [], profiles: [], assignments: [], jobs: [], audit: [],
-  schedules: [], hw: null, hwOpen: false, selDevices: new Set(), selApps: new Set(), openJob: null, code: null, key: null, q: '', cat: 'All', msg: null, err: null, autoSel: false, rollout: true, ready: false};
-const BASIC = ['install', 'devices', 'activity'], ADV = ['profiles', 'scripts', 'automation', 'audit'];
-const LABEL = {install: 'Install apps', devices: 'Devices', activity: 'Activity', profiles: 'Profiles', scripts: 'Scripts', automation: 'Auto-sync', audit: 'Audit log'};
 
-function h(tag, attrs, ...kids) {   // text is always a text node: no HTML injection
+function h(tag, attrs, ...kids) {   // text is always a text node: no HTML injection anywhere
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
     if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else if (k === 'class') e.className = v;
     else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
     else if (v === true) e.setAttribute(k, '');
-    else if (v !== false && v != null) e.setAttribute(k, v);
+    else e.setAttribute(k, v);
   }
-  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(k));
+  for (const k of kids.flat(Infinity)) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(String(k)));
   return e;
 }
+function ic(name, size = 16) {     // ICONS holds trusted, build-time markup (Lucide)
+  const s = h('span', {class: 'ic'});
+  s.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+  return s;
+}
+const plural = (n, w, pl) => `${n} ${n === 1 ? w : (pl || w + 's')}`;
+const hue = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+const ago = t => { if (!t) return 'never'; const s = Math.max(0, Date.now() / 1000 - t);
+  return s < 45 ? 'just now' : s < 3600 ? Math.round(s / 60) + ' min ago' : s < 86400 ? Math.round(s / 3600) + ' h ago' : Math.round(s / 86400) + ' d ago'; };
+const clock = t => t ? new Date(t * 1000).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'}) : '';
+const gb = mb => mb >= 1024 ? (mb / 1024).toFixed(mb >= 10240 ? 0 : 1) + ' GB' : mb + ' MB';
+const uptime = s => { if (!s) return '—'; const d = Math.floor(s / 86400), hr = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? `${d}d ${hr}h` : hr ? `${hr}h ${m}m` : `${m}m`; };
+const dur = (a, b) => { if (!a || !b) return ''; const s = Math.round(b - a); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + (s % 60) + 's'; };
+
+const S = {
+  lite: false, token: LS.get('tok'), email: LS.get('email'), version: '', manager: '', ready: false, admin: false,
+  icons: new Set(), devices: [], catalog: [], packs: [], jobs: [], profiles: [], scripts: [], assignments: [], schedules: [], audit: [], overview: null, settings: null,
+  sync: {ready: false, busy: false, steps: []},
+  sel: {apps: new Map(), devices: new Set()}, q: '', cat: 'all', tab: 'all', rollout: true, openJob: null, jobFilter: 'all',
+  drawer: null, versions: {}, hw: null, theme: LS.get('theme') || 'system', devQ: '', devTag: '', err: null, autoSel: false,
+};
+const routeOf = () => { const [page, id] = location.hash.replace(/^#\/?/, '').split('/'); if (page === 'devices' && id) return {page: 'device', id};
+  return {page: page || (S.lite ? 'apps' : 'overview'), id}; };
+const go = path => { location.hash = '#/' + path; };
+
 async function api(method, path, body) {
   const r = await fetch(path, {method, headers: {'Content-Type': 'application/json', ...(S.token ? {Authorization: 'Bearer ' + S.token} : {})},
     body: method === 'GET' ? undefined : JSON.stringify(body || {})});
@@ -95,273 +310,683 @@ async function api(method, path, body) {
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 }
-const ago = t => !t ? 'never' : (s => s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : s < 86400 ? Math.floor(s / 3600) + ' h ago' : Math.floor(s / 86400) + ' d ago')(Date.now() / 1000 - t);
-const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
-const allTags = () => [...new Set(S.devices.flatMap(d => d.tags))].sort();
-const RANK = c => c === 'Runtimes & prerequisites' ? 2 : c === 'Drivers & hardware' ? 3 : 1;   // everyday apps first, plumbing last
-const sortCats = cs => [...cs].sort((a, b) => RANK(a) - RANK(b) || a.localeCompare(b));
-const badgeFor = a => a.key.startsWith('vcredist') ? 'C++' : a.key.startsWith('dotnet') ? '.NET' : a.key === 'directx' ? 'DX' : a.key === 'webview2' ? 'WV2'
+
+// ---------- theme
+const media = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() { document.documentElement.dataset.theme = S.theme === 'system' ? (media.matches ? 'dark' : 'light') : S.theme; }
+media.addEventListener('change', applyTheme);
+function cycleTheme() { S.theme = {system: 'light', light: 'dark', dark: 'system'}[S.theme]; LS.set('theme', S.theme); applyTheme(); render(); }
+
+// ---------- toasts
+function toast(msg, kind, action) {
+  const t = h('div', {class: 'toast' + (kind === 'error' ? ' err' : '')}, ic(kind === 'error' ? 'alert' : 'ok', 16), h('span', {}, msg),
+    action && h('a', {href: action.href, onclick: () => t.remove()}, action.label));
+  document.getElementById('toasts').append(t);
+  setTimeout(() => t.remove(), kind === 'error' ? 7000 : 4200);
+}
+
+// ---------- modal / confirm / prompt (imperative, independent of page re-renders)
+function openModal({title, width = 480, body, footer}) {
+  const close = () => { wrap.remove(); scrim.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  const scrim = h('div', {class: 'scrim', onclick: close});
+  const mb = h('div', {class: 'mb'}), mf = h('div', {class: 'mf'});
+  const wrap = h('div', {class: 'modal-wrap', onmousedown: e => { if (e.target === wrap) close(); }},
+    h('div', {class: 'modal', style: {width: width + 'px'}, role: 'dialog', 'aria-modal': 'true'},
+      h('div', {class: 'mh'}, h('h2', {}, title), h('button', {class: 'btn icon ghost sm', onclick: close, 'aria-label': 'Close'}, ic('x', 16))), mb, footer === false ? null : mf));
+  document.getElementById('overlay').append(scrim, wrap);
+  document.addEventListener('keydown', onKey);
+  const api_ = {close, mb, mf};
+  body && body(api_);
+  setTimeout(() => (mb.querySelector('input,select,textarea') || {focus() {}}).focus(), 30);
+  return api_;
+}
+function confirmDialog(title, text, okLabel = 'Confirm', danger = false) {
+  return new Promise(res => {
+    const m = openModal({title, width: 420, body: m => m.mb.append(h('p', {class: 'sec'}, text))});
+    const done = v => { m.close(); res(v); };
+    m.mf.append(h('button', {class: 'btn', onclick: () => done(false)}, 'Cancel'), h('button', {class: 'btn primary' + (danger ? ' danger' : ''), onclick: () => done(true),
+      style: danger ? {background: 'var(--bad)', borderColor: 'var(--bad)', color: '#fff'} : null}, okLabel));
+  });
+}
+function promptDialog(title, label, value = '', hint = '') {
+  return new Promise(res => {
+    const inp = h('input', {class: 'input', value});
+    const m = openModal({title, width: 420, body: m => m.mb.append(h('div', {class: 'field'}, h('label', {}, label), inp, hint && h('span', {class: 'hint'}, hint)))});
+    const done = v => { m.close(); res(v); };
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') done(inp.value.trim()); });
+    m.mf.append(h('button', {class: 'btn', onclick: () => done(null)}, 'Cancel'), h('button', {class: 'btn primary', onclick: () => done(inp.value.trim())}, 'Save'));
+  });
+}
+const copyText = async t => { try { await navigator.clipboard.writeText(t); toast('Copied to clipboard'); } catch { toast('Copy failed; select the text instead', 'error'); } };
+function codeBox(text) { return h('div', {class: 'codebox'}, text, h('button', {class: 'btn icon sm ghost', title: 'Copy', onclick: () => copyText(text)}, ic('copy', 14))); }
+
+// ---------- small components
+const badge = (text, tone = '') => h('span', {class: 'badge ' + tone}, text);
+const dotEl = tone => h('span', {class: 'dot ' + tone});
+const PACK_ICON = {essentials: 'star', developer: 'terminal', gaming: 'gamepad', creator: 'palette', homelab: 'server', privacy: 'shield', runtimes: 'puzzle'};
+const BADGE_TEXT = a => a.key.startsWith('vcredist') ? 'C++' : a.key.startsWith('dotnet') ? '.NET' : a.key === 'directx' ? 'DX' : a.key === 'webview2' ? 'WV2'
   : ['windows-terminal', 'powershell'].includes(a.key) ? '>_' : a.key === 'vscode' ? 'VS' : a.name[0].toUpperCase();
-// Brand icon from /icons/<key>.svg; falls back to a coloured letter tile when there is none.
-function appIcon(a, extra) {
-  const tile = h('div', {class: 'av ico' + (extra ? ' ' + extra : '')});
-  const fallback = () => { tile.className = 'av' + (extra ? ' ' + extra : ''); tile.replaceChildren(badgeFor(a));
-    tile.style.background = `linear-gradient(135deg,hsl(${hue(a.key)} 70% 52%),hsl(${(hue(a.key) + 40) % 360} 70% 42%))`;
-    if (badgeFor(a).length > 2) tile.style.fontSize = '12px'; };
-  tile.append(h('img', {src: '/icons/' + a.key + '.svg', alt: '', loading: 'lazy', onerror: fallback}));
-  return tile;
+function tile(a, size = '') {   // brand icon when we have one, otherwise a flat letter tile
+  const t = h('div', {class: 'tile ' + size});
+  const fb = () => { t.className = 'tile fb ' + size; t.style.background = `hsl(${hue(a.key)} 42% 46%)`; t.replaceChildren(BADGE_TEXT(a)); if (BADGE_TEXT(a).length > 2) t.style.fontSize = '11px'; };
+  if (S.icons.has(a.key)) t.append(h('img', {src: '/icons/' + a.key + '.svg', alt: '', loading: 'lazy', onerror: fb})); else fb();
+  return t;
 }
-const hue = s => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 360, 7);
+const catOf = k => S.catalog.find(a => a.key === k);
+const allCats = () => { const r = c => c === 'Runtimes & prerequisites' ? 2 : c === 'Drivers & hardware' ? 3 : 1;
+  return [...new Set(S.catalog.map(a => a.category))].sort((a, b) => r(a) - r(b) || a.localeCompare(b)); };
+const tags = () => [...new Set(S.devices.flatMap(d => d.tags))].sort();
+const targets = () => S.lite ? S.devices : S.devices.filter(d => S.sel.devices.has(d.id));
 
-function signOut() { LS.set('tok', null); LS.set('email', null); S.token = null; render(); }
-function setSession(r) { S.token = r.token; S.email = r.email; S.home = !!r.home; LS.set('tok', r.token); LS.set('email', r.email); }
-
-async function load() {
-  const need = ['devices', 'catalog', 'packs', 'jobs', 'profiles', ...(S.adv && !S.lite ? ['scripts', 'assignments', 'audit', 'schedules'] : [])];
-  const res = await Promise.all(need.map(p => api('GET', '/api/' + p)));
-  need.forEach((p, i) => S[p] = res[i]);
-  S.selDevices = new Set([...S.selDevices].filter(id => S.devices.some(d => d.id === id)));
-  if (S.lite && !S.hw) api('GET', '/api/hardware').then(h => { if (h.advice && h.advice.length) { S.hw = h; render(); } }).catch(() => {});
-  if (!S.autoSel && S.devices.length === 1) { S.selDevices.add(S.devices[0].id); S.autoSel = true; }  // nothing to choose with one device
-}
-async function act(fn, okMsg) {
-  try { S.err = null; S.msg = null; await fn(); if (okMsg) S.msg = okMsg; await load(); } catch (e) { S.err = e.message; }
-  render();
+function appInfo(a, devs) {
+  let inst = 0, out = 0, held = 0, ver = '', avail = '';
+  for (const d of devs) {
+    if (d.have.includes(a.key)) { inst++; ver = ver || (d.versions || {})[a.key] || ''; }
+    if (d.outdated.includes(a.key)) { out++; avail = avail || (d.available || {})[a.key] || ''; }
+    if ((d.held || []).includes(a.key)) held++;
+  }
+  return {inst, out, held, ver, avail, n: devs.length};
 }
 
-// ---------------------------------------------------------------- sign in
-function authView() {
-  const email = h('input', {type: 'email', placeholder: 'email', autocomplete: 'username'});
-  const pw = h('input', {type: 'password', placeholder: 'password (8+ characters)', autocomplete: 'current-password'});
-  const go = mode => async () => {
-    try { setSession(await api('POST', '/api/' + mode, {email: email.value, password: pw.value})); S.err = null; await load(); render(); }
-    catch (e) { S.err = e.message; render(); }
-  };
-  return h('main', {}, h('div', {class: 'card', style: 'max-width:400px;margin:70px auto'},
-    h('div', {class: 'logo', style: 'margin-bottom:10px'}, h('i', {}, '⬇'), 'Openite'), h('p', {class: 'mute'}, 'Sign in to manage software on all your devices.'),
-    S.err && h('div', {class: 'err'}, S.err), h('div', {class: 'row'}, email, pw),
-    h('div', {class: 'row', style: 'margin-top:14px'}, h('button', {class: 'b', onclick: go('login')}, 'Sign in'), h('button', {class: 'b sec', onclick: go('register')}, 'Create account'))));
+// ---------- data
+async function load(extra) {
+  const r = routeOf().page;
+  const want = ['devices', 'catalog', 'packs', 'jobs'];
+  if (!S.lite) want.push('profiles', 'scripts');
+  if (!S.lite && r === 'overview') want.push('overview');
+  if (!S.lite && r === 'automation') want.push('assignments', 'schedules');
+  if (!S.lite && r === 'audit') want.push('audit');
+  if (!S.lite && r === 'settings') want.push('settings');
+  const res = await Promise.all(want.map(p => api('GET', '/api/' + p)));
+  want.forEach((p, i) => S[p] = res[i]);
+  S.sel.devices = new Set([...S.sel.devices].filter(id => S.devices.some(d => d.id === id)));
+  if (!S.autoSel && S.devices.length === 1) { S.sel.devices.add(S.devices[0].id); S.autoSel = true; }
+  if (S.lite) { S.sync = await api('GET', '/api/sync'); if (!S.hw) api('GET', '/api/hardware').then(x => { S.hw = x; render(); }).catch(() => {}); }
+  if (!S.lite && S.settings) S.admin = S.settings.is_admin;
 }
+const signature = () => JSON.stringify([S.devices, S.jobs.map(j => [j.id, j.status, j.finished]), S.catalog.length, S.sync.busy, S.profiles, S.overview, S.assignments, S.schedules, S.settings, S.scripts.length]);
+async function poll() {
+  if (!S.token || document.hidden) return;
+  const before = signature();
+  try { await load(); } catch { return; }
+  if (signature() !== before && !document.querySelector('#overlay .modal')) render();
+}
+function signOut() { LS.set('tok', null); LS.set('email', null); S.token = null; S.ready = true; render(); }
+function setSession(r) { S.token = r.token; S.email = r.email; LS.set('tok', r.token); LS.set('email', r.email); }
+async function rescan() { try { await api('POST', '/api/rescan'); S.sync.busy = true; render(); const t = setInterval(async () => { await load(); if (!S.sync.busy) { clearInterval(t); toast('Rescan finished'); } render(); }, 900); } catch (e) { toast(e.message, 'error'); } }
 
-// ---------------------------------------------------------------- install (main screen)
-function appStatus(a) {
-  const sel = S.devices.filter(d => S.selDevices.has(d.id));
-  if (!sel.length) return null;
-  const inst = sel.filter(d => d.have.includes(a.key)).length, up = sel.filter(d => d.outdated.includes(a.key)).length;
-  if (!inst) return null;
-  const where = sel.length > 1 ? ` on ${inst}/${sel.length}` : '';
-  return up ? h('span', {class: 'tag up'}, 'update available' + where) : h('span', {class: 'tag ok'}, '✔ installed' + where);
+// ---------- jobs
+function stepsFor(kind, keys) {
+  const versions = {}; keys.forEach(k => { const v = (S.sel.apps.get(k) || {}).version; if (v) versions[k] = v; });
+  return [{type: kind, apps: keys, versions}];
 }
-function startJob(steps, title, what) {
-  const ids = [...S.selDevices];
-  if (!ids.length) { S.err = 'Choose at least one device first.'; return render(); }
-  act(async () => {
-    const r = await api('POST', '/api/jobs', {device_ids: ids, steps, title, rollout: S.rollout && ids.length >= 4});
-    S.tab = 'activity';
-    S.msg = `${what} started` + (S.lite ? '.' : ` on ${plural(ids.length, 'device')}.`) + (r.batches ? ` Rolling out in stages (${r.batches.join(' → ')}); it stops automatically if the first ones fail.` : ' Progress shows below.');
-  });
-}
-function installView() {
-  const apps = [...S.selApps], q = S.q.toLowerCase();
-  const cats = sortCats(new Set(S.catalog.map(a => a.category)));
-  const selDevs = S.devices.filter(d => S.selDevices.has(d.id));
-  const cards = [];
-  const shown = a => (S.cat === 'All' || S.cat === 'Selected' || a.category === S.cat) && (S.cat !== 'Selected' || S.selApps.has(a.key)) && (!q || (a.name + ' ' + a.key).toLowerCase().includes(q));
-  const sections = cats.filter(c => (S.cat === 'All' || S.cat === 'Selected' || c === S.cat) && (S.cat !== 'Selected' || S.catalog.some(a => a.category === c && S.selApps.has(a.key)))).map(c => {
-    const list = S.catalog.filter(a => a.category === c && (S.cat !== 'Selected' || S.selApps.has(a.key)));
-    return h('section', {}, h('h3', {}, c, h('span', {}, list.length)), h('div', {class: 'grid'}, list.map(a => {
-      const card = h('div', {class: 'app' + (S.selApps.has(a.key) ? ' sel' : ''), 'data-n': (a.name + ' ' + a.key).toLowerCase(), style: shown(a) ? '' : 'display:none',
-        onclick: () => { S.selApps.has(a.key) ? S.selApps.delete(a.key) : S.selApps.add(a.key); render(); }},
-        appIcon(a),
-        h('div', {}, h('div', {class: 'nm'}, a.name, a.custom && h('span', {class: 'tag', style: 'margin-left:6px'}, 'custom')), h('div', {class: 'st'}, appStatus(a))));
-      cards.push(card); return card;
-    })));
-  });
-  const search = h('input', {placeholder: '🔍  Search apps…', value: S.q, style: 'width:230px', oninput: e => {
-    S.q = e.target.value.toLowerCase(); cards.forEach(c => c.style.display = c.dataset.n.includes(S.q) ? '' : 'none'); }});
-  const d0 = S.devices[0], nUp = S.lite && d0 ? d0.n_upgradable : 0;
-  return h('div', {},
-    h('div', {class: 'card hero'}, h('div', {class: 'grow'}, h('h2', {}, S.lite ? 'Set up this PC' : 'Pick your apps, click Install'),
-      h('div', {class: 'steps'}, h('span', {}, h('b', {}, '1'), 'Choose apps or a starter pack'), !S.lite && h('span', {}, h('b', {}, '2'), 'Choose devices'), h('span', {}, h('b', {}, S.lite ? '2' : '3'), 'Press Install')),
-      S.devices.length === 0 && h('p', {class: 'err', style: 'margin:12px 0 0'}, S.lite ? 'No supported package manager found (need winget, Homebrew or apt).' : 'No devices yet. Go to Devices to add your first one.')),
-      S.lite && d0 && h('div', {}, h('div', {class: 'mute', style: 'text-align:right;margin-bottom:6px'}, `${d0.n_installed} packages installed · ${nUp} update${nUp === 1 ? '' : 's'} available`),
-        h('button', {class: 'b sec', onclick: () => startJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, '⟳ Update everything'))),
-    h('div', {class: 'row', style: 'margin-bottom:12px'}, h('b', {}, 'Starter packs'),
-      S.packs.map(p => { const av = p.apps.filter(k => S.catalog.some(a => a.key === k)), n = av.filter(k => S.selApps.has(k)).length;
-        if (!av.length) return null;
-        return h('button', {class: 'chip' + (n === av.length ? ' on' : ''), title: av.join(', '), onclick: () => {
-          av.forEach(a => n === av.length ? S.selApps.delete(a) : S.selApps.add(a)); render(); }}, p.icon + ' ' + p.name, n > 0 && n < av.length && h('span', {class: 'part'}, `${n}/${av.length}`)); }),
-      h('span', {class: 'grow'}), search),
-    h('div', {class: 'cats'}, ['All', ...(apps.length ? ['Selected'] : []), ...cats].map(c => h('button', {class: 'chip' + (S.cat === c ? ' on' : ''), onclick: () => { S.cat = c; render(); }}, c === 'Selected' ? `✔ Selected (${apps.length})` : c))),
-    S.lite && hardwareCard(),
-    sections,
-    h('div', {class: 'bar'},
-      apps.length > 0 && h('div', {class: 'tray'}, apps.map(k => { const a = S.catalog.find(x => x.key === k); if (!a) return null;
-        return h('span', {class: 'tchip', title: 'Click to remove', onclick: () => { S.selApps.delete(k); render(); }}, appIcon(a), h('b', {}, a.name), h('i', {}, '✕')); })),
-      !S.lite && h('div', {class: 'row', style: 'margin-bottom:10px'}, h('b', {}, 'Install on'),
-        S.devices.map(d => h('button', {class: 'chip' + (S.selDevices.has(d.id) ? ' on' : ''), onclick: () => { S.selDevices.has(d.id) ? S.selDevices.delete(d.id) : S.selDevices.add(d.id); render(); }}, (d.online ? '● ' : '○ ') + d.name)),
-        S.devices.length > 1 && h('button', {class: 'chip', onclick: () => { S.selDevices = new Set(S.selDevices.size === S.devices.length ? [] : S.devices.map(d => d.id)); render(); }}, 'all / none')),
-      h('div', {class: 'row'},
-        h('button', {class: 'b big', disabled: !apps.length || !selDevs.length, onclick: () => startJob([{type: 'install', apps}], 'Install', 'Install')}, apps.length ? `Install ${plural(apps.length, 'app')}` : 'Select some apps'),
-        h('button', {class: 'b sec', disabled: !apps.length || !selDevs.length, onclick: () => startJob([{type: 'upgrade', apps}], 'Update', 'Update')}, 'Update selected'),
-        !S.lite && h('button', {class: 'b sec', disabled: !selDevs.length, onclick: () => startJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, 'Update everything'),
-        h('button', {class: 'b sec', disabled: !apps.length || !selDevs.length, onclick: () => confirm('Silently uninstall the selected apps? No windows will pop up.') && startJob([{type: 'uninstall', apps}], 'Uninstall', 'Uninstall')}, 'Uninstall'),
-        h('span', {class: 'grow'}),
-        !S.lite && apps.length > 0 && h('button', {class: 'b sec', onclick: () => { const n = prompt('Name this set of apps (reuse it on other devices):'); n && act(() => api('POST', '/api/profiles', {name: n, apps}), 'Saved profile "' + n + '".'); }}, 'Save as profile'),
-        apps.length > 0 && h('button', {class: 'b sec', onclick: () => { S.selApps.clear(); render(); }}, 'Clear')),
-      selDevs.length >= 4 && h('label', {class: 'mute', style: 'display:block;margin-top:8px'}, h('input', {type: 'checkbox', checked: S.rollout, onchange: e => S.rollout = e.target.checked}), ' Staged rollout: try a few devices first and stop if they fail')),
-    S.adv && !S.lite && customAppForm());
-}
-function hardwareCard() {
-  if (!S.hw) return null;
-  return h('details', {class: 'card hw', open: S.hwOpen, ontoggle: e => { S.hwOpen = e.target.open; }},
-    h('summary', {}, '🧰 Recommended for this PC: drivers & tools (' + S.hw.advice.length + ')'),
-    h('p', {class: 'mute', style: 'margin:0 0 6px'}, [S.hw.hardware.maker, S.hw.hardware.model].filter(Boolean).join(' ') + (S.hw.hardware.gpus && S.hw.hardware.gpus.length ? ' · GPU: ' + S.hw.hardware.gpus.join(', ') : '') +
-      '. Openite never installs raw drivers: it installs the vendor\'s own update tool, or opens the official page.'),
-    S.hw.advice.map(a => h('div', {class: 'adv-row'}, h('div', {class: 'grow'}, h('b', {}, a.title), h('div', {class: 'mute'}, a.why)),
-      a.app_key ? (S.selApps.has(a.app_key) ? h('span', {class: 'tag ok'}, '✔ selected below') : h('button', {class: 'b sec', onclick: () => { S.selApps.add(a.app_key); render(); }}, 'Select'))
-                : h('button', {class: 'b sec', onclick: () => api('POST', '/api/drivers/open', {title: a.title}).catch(e => { S.err = e.message; render(); })}, 'Open official page'))));
-}
-function customAppForm() {
-  const f = {}; const inp = (k, ph) => f[k] = h('input', {placeholder: ph, size: 14});
-  return h('div', {}, h('h3', {}, 'Add your own app'), h('div', {class: 'card row'}, inp('key', 'short key (e.g. myapp)'), inp('name', 'Display name'), inp('winget', 'winget id'), inp('brew', 'brew name'), inp('apt', 'apt package'),
-    h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/apps', Object.fromEntries(Object.entries(f).map(([k, e]) => [k, e.value.trim()]))), 'App added.')}, 'Add')));
-}
-
-// ---------------------------------------------------------------- devices
-function devicesView() {
-  const origin = location.origin;
-  const cmds = c => `openite enroll --server ${origin} --code ${c}`;
-  const tags = allTags();
-  return h('div', {},
-    !S.home && h('div', {class: 'card'}, h('div', {class: 'row'}, h('div', {class: 'grow'}, h('h2', {}, 'Add a device'), h('span', {class: 'mute'}, 'Generate a code, then run the command on the device you want to add.')),
-      h('button', {class: 'b', onclick: () => act(async () => S.code = (await api('POST', '/api/enroll-code', {})).code)}, 'Get enrollment command')),
-      S.code && h('div', {}, h('p', {class: 'mute'}, 'Valid 15 minutes, works once. Then keep it running with ', h('code', {}, 'openite run'), ' or install it as a service: ', h('code', {}, 'openite install-service')), h('pre', {}, cmds(S.code))),
-      S.adv && enrollKeyForm()),
-    S.devices.length > 1 && h('div', {class: 'row', style: 'margin-bottom:12px'}, h('b', {}, 'Select'),
-      h('button', {class: 'chip', onclick: () => { S.selDevices = new Set(S.devices.map(d => d.id)); render(); }}, 'All'),
-      h('button', {class: 'chip', onclick: () => { S.selDevices.clear(); render(); }}, 'None'),
-      tags.map(t => h('button', {class: 'chip', onclick: () => { S.devices.filter(d => d.tags.includes(t)).forEach(d => S.selDevices.add(d.id)); render(); }}, '#' + t))),
-    S.devices.length === 0 && h('p', {class: 'mute'}, 'No devices yet.'),
-    S.devices.map(d => h('div', {class: 'card row'},
-      h('input', {type: 'checkbox', checked: S.selDevices.has(d.id), onchange: e => { e.target.checked ? S.selDevices.add(d.id) : S.selDevices.delete(d.id); render(); }}),
-      h('span', {class: 'dot' + (d.online ? ' on' : ''), title: d.online ? 'online' : 'offline'}),
-      h('div', {class: 'grow'}, h('b', {}, d.name), ' ', d.tags.map(t => h('span', {class: 'tag', style: 'margin-right:4px'}, '#' + t)),
-        h('div', {class: 'mute'}, `${d.online ? 'Online' : 'Offline, last seen ' + ago(d.last_seen)} · ${d.os || '?'} · ${d.manager || '?'} · ${plural(d.n_installed, 'package')}`, d.n_upgradable ? ` · ${plural(d.n_upgradable, 'update')} available` : ''),
-        d.managed && (d.missing.length ? h('div', {class: 'tag bad'}, `Out of sync, missing: ${d.missing.join(', ')}`) : h('div', {class: 'tag ok'}, '✔ In sync'))),
-      !S.lite && [
-        h('button', {class: 'b sec', onclick: () => { const v = prompt('Tags, comma separated (e.g. prod, kitchen, gaming):', d.tags.join(', ')); v != null && act(() => api('PUT', '/api/devices/' + d.id, {tags: v.split(',').map(s => s.trim()).filter(Boolean)})); }}, 'Tags'),
-        h('button', {class: 'b sec', onclick: () => { const n = prompt('Rename device', d.name); n && act(() => api('PUT', '/api/devices/' + d.id, {name: n})); }}, 'Rename'),
-        h('button', {class: 'b sec', onclick: () => confirm('Remove ' + d.name + ' from your account? (Also stop its agent.)') && act(() => api('DELETE', '/api/devices/' + d.id))}, 'Remove')])));
-}
-function enrollKeyForm() {
-  const tags = h('input', {placeholder: 'tags for new devices, e.g. prod, dc:eu'});
-  return h('div', {style: 'margin-top:12px'}, h('div', {class: 'row'}, h('span', {class: 'mute'}, 'Automation / golden images:'), tags,
-    h('button', {class: 'b sec', onclick: () => act(async () => S.key = (await api('POST', '/api/enroll-code', {reusable: true, tags: tags.value.split(',').map(s => s.trim()).filter(Boolean)})).code)}, 'Create reusable key')),
-    S.key && h('div', {}, h('p', {class: 'mute'}, 'Reusable key: every device that enrolls with it joins with those tags. Keep it secret; it doesn\'t expire.'), h('pre', {}, `openite enroll --server ${location.origin} --code ${S.key}`)));
-}
-
-// ---------------------------------------------------------------- activity
-function activityView() {
-  const dn = id => (S.devices.find(d => d.id === id) || {name: '#' + id}).name;
-  const word = {queued: 'waiting', running: 'running…', done: '✔ finished', failed: '✘ failed', halted: 'not started (rollout stopped)', cancelled: 'cancelled'};
-  return h('div', {}, S.jobs.length === 0 && h('div', {class: 'card mute'}, 'Nothing has run yet. Go to ', h('b', {}, 'Install apps'), ' to get started.'),
-    S.jobs.map(j => h('div', {class: 'card'}, h('div', {class: 'row', style: 'cursor:pointer', onclick: () => { S.openJob = S.openJob === j.id ? null : j.id; render(); }},
-      !S.lite && h('b', {}, dn(j.device_id)), h('span', {class: 'grow'}, j.title, j.source === 'reconcile' && h('span', {class: 'tag', style: 'margin-left:6px'}, 'auto'), j.rollout_id && h('span', {class: 'tag', style: 'margin-left:6px'}, 'stage ' + (j.batch + 1))),
-      h('span', {class: 'st-' + j.status}, j.status === 'running' && h('span', {class: 'spin'}), word[j.status] || j.status), h('span', {class: 'mute'}, ago(j.created)),
-      ['queued', 'halted'].includes(j.status) && h('button', {class: 'b sec', onclick: e => { e.stopPropagation(); act(() => api('POST', `/api/jobs/${j.id}/cancel`)); }}, 'Cancel')),
-      S.openJob === j.id && h('pre', {style: 'margin-top:10px'}, j.log || (j.status === 'queued' ? 'Waiting for the device to pick this up (it checks in every few seconds while its agent is running).' : j.status === 'running' ? 'Working… installs can take a few minutes. Windows may ask for permission.' : '(no output)')))));
-}
-
-// ---------------------------------------------------------------- advanced tabs
-function profilesView() {
-  const byKey = Object.fromEntries(S.catalog.map(a => [a.key, a.name]));
-  return h('div', {}, h('p', {class: 'mute'}, 'A profile is a reusable set of apps, optionally followed by setup scripts. Create one on the Install tab ("Save as profile").'),
-    S.profiles.length === 0 && h('p', {class: 'mute'}, 'No profiles yet.'),
-    S.profiles.map(p => {
-      const pick = h('select', {multiple: true, size: Math.min(4, Math.max(2, S.scripts.length))}, S.scripts.map(s => h('option', {value: s.id, selected: p.script_ids.includes(s.id)}, s.name)));
-      return h('div', {class: 'card'}, h('div', {class: 'row'}, h('b', {class: 'grow'}, p.name),
-        h('button', {class: 'b', onclick: () => startJob([{type: 'profile', profile_id: p.id}], 'Profile: ' + p.name, 'Profile')}, 'Apply to selected devices'),
-        h('button', {class: 'b sec', onclick: () => confirm('Delete this profile?') && act(() => api('DELETE', '/api/profiles/' + p.id))}, 'Delete')),
-        h('p', {}, p.apps.map(k => byKey[k] || k).join(', ') || 'no apps'),
-        S.scripts.length > 0 && h('div', {class: 'row'}, h('span', {class: 'mute'}, 'Setup scripts to run after installing:'), pick,
-          h('button', {class: 'b sec', onclick: () => act(() => api('PUT', '/api/profiles/' + p.id, {script_ids: [...pick.selectedOptions].map(o => +o.value)}), 'Saved.')}, 'Save')));
-    }));
-}
-function scriptsView() {
-  const name = h('input', {placeholder: 'Script name'});
-  const shell = h('select', {}, ['powershell', 'bash', 'cmd'].map(s => h('option', {}, s)));
-  const body = h('textarea', {placeholder: 'e.g.  git config --global user.name "Me"'});
-  return h('div', {},
-    h('div', {class: 'card'}, h('h2', {}, 'Setup scripts'), h('p', {class: 'mute'}, 'Small scripts to run on your devices after installing apps (set git name, create folders, tweak settings). They run with the agent\'s permissions, so only add scripts you trust.'),
-      h('div', {class: 'row'}, name, shell), h('div', {style: 'margin:10px 0'}, body),
-      h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/scripts', {name: name.value, shell: shell.value, body: body.value}), 'Script saved.')}, 'Save script')),
-    S.scripts.map(s => h('div', {class: 'card'}, h('div', {class: 'row'}, h('b', {class: 'grow'}, s.name), h('span', {class: 'tag'}, s.shell),
-      h('button', {class: 'b', onclick: () => startJob([{type: 'script', script_id: s.id}], 'Script: ' + s.name, 'Script')}, 'Run on selected devices'),
-      h('button', {class: 'b sec', onclick: () => confirm('Delete script?') && act(() => api('DELETE', '/api/scripts/' + s.id))}, 'Delete')), h('pre', {}, s.body))));
-}
-function automationView() {
-  const tag = h('select', {}, h('option', {value: 'all'}, 'all devices'), allTags().map(t => h('option', {value: t}, '#' + t)));
-  const prof = h('select', {}, S.profiles.map(p => h('option', {value: p.id}, p.name)));
-  const au = h('input', {type: 'checkbox'});
-  const pname = id => (S.profiles.find(p => p.id === id) || {name: '(deleted)'}).name;
-  return h('div', {},
-    h('div', {class: 'card'}, h('h2', {}, 'Keep devices in sync automatically'),
-      h('p', {class: 'mute'}, 'Choose a group of devices (by tag) and a profile. Openite installs any missing apps from that profile on every matching device, including new ones that join later, and keeps them that way.'),
-      S.profiles.length === 0 ? h('p', {}, 'Create a profile first (Install tab → "Save as profile").') :
-        h('div', {class: 'row'}, 'Devices in', tag, 'should have', prof, h('label', {}, au, ' also keep them updated'),
-          h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/assignments', {tag: tag.value, profile_id: +prof.value, auto_update: au.checked}), 'Rule added.')}, 'Add rule'))),
-    S.assignments.map(a => h('div', {class: 'card row'}, h('span', {class: 'grow'}, 'Devices in ', h('b', {}, a.tag === 'all' ? 'all devices' : '#' + a.tag), ' keep ', h('b', {}, pname(a.profile_id)), a.auto_update ? ' installed and updated' : ' installed'),
-      h('button', {class: 'b sec', onclick: () => act(() => api('DELETE', '/api/assignments/' + a.id))}, 'Remove'))),
-    schedulesCard());
-}
-function schedulesCard() {
-  const tag = h('select', {}, h('option', {value: 'all'}, 'all devices'), allTags().map(t => h('option', {value: t}, '#' + t)));
-  const time = h('input', {type: 'time', value: '03:00'});
-  const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-  const boxes = DAYS.map(d => h('label', {style: 'margin-right:6px'}, h('input', {type: 'checkbox', value: d}), ' ' + d));
-  const ro = h('input', {type: 'checkbox', checked: true});
-  return h('div', {}, h('div', {class: 'card'}, h('h2', {}, 'Scheduled updates'),
-    h('p', {class: 'mute'}, 'Update everything on a group of devices at a set time (server time). Leave all days unticked for every day. Groups of 4+ devices roll out in stages.'),
-    h('div', {class: 'row'}, 'Update', tag, 'at', time, boxes, h('label', {}, ro, ' staged rollout'),
-      h('button', {class: 'b', onclick: () => act(() => api('POST', '/api/schedules', {tag: tag.value, time: time.value, days: boxes.map(b => b.firstChild).filter(i => i.checked).map(i => i.value), rollout: ro.checked}), 'Schedule added.')}, 'Add schedule'))),
-    S.schedules.map(x => h('div', {class: 'card row'}, h('span', {class: 'grow'}, 'Update ', h('b', {}, x.tag === 'all' ? 'all devices' : '#' + x.tag), ' at ', h('b', {}, x.time), x.days.length ? ' on ' + x.days.join(', ') : ' every day', x.rollout ? ' (staged)' : ''),
-      h('button', {class: 'b sec', onclick: () => act(() => api('DELETE', '/api/schedules/' + x.id))}, 'Remove'))));
-}
-function auditView() {
-  return h('div', {}, h('p', {class: 'mute'}, 'Who did what, latest first.'),
-    h('div', {class: 'card'}, h('table', {}, h('tr', {}, h('th', {}, 'When'), h('th', {}, 'Who'), h('th', {}, 'Action'), h('th', {}, 'Details')),
-      S.audit.map(a => h('tr', {}, h('td', {class: 'mute'}, new Date(a.ts * 1000).toLocaleString()), h('td', {}, a.actor), h('td', {}, a.action), h('td', {}, a.detail))))));
-}
-
-const VIEWS = {install: installView, devices: devicesView, activity: activityView, profiles: profilesView, scripts: scriptsView, automation: automationView, audit: auditView};
-function render() {
-  const root = document.getElementById('root'), y = scrollY;
-  if (!S.ready) { root.replaceChildren(h('main', {}, h('p', {class: 'mute', style: 'margin-top:80px;text-align:center'}, 'Starting… checking what\'s installed on this PC (a few seconds).'))); return; }
-  if (!S.token) { root.replaceChildren(authView()); return; }
-  const basic = S.lite ? ['install', 'activity'] : BASIC;
-  if ((!S.adv || S.lite) && ADV.includes(S.tab)) S.tab = 'install';
-  if (S.lite && S.tab === 'devices') S.tab = 'install';
-  const tabBtn = t => h('button', {class: S.tab === t ? 'on' : '', onclick: () => { S.tab = t; S.msg = S.err = null; render(); }}, LABEL[t] + (t === 'devices' && S.devices.length ? ` (${S.devices.length})` : '') + (t === 'activity' && S.jobs.some(j => j.status === 'running') ? ' •' : ''));
-  root.replaceChildren(h('div', {},
-    h('header', {}, h('div', {class: 'logo'}, h('i', {}, '⬇'), 'Openite'), h('nav', {}, basic.map(tabBtn), S.adv && !S.lite && [h('span', {class: 'sep'}), ADV.map(tabBtn)]),
-      !S.lite && h('label', {class: 'mute', title: 'Show profiles, scripts, auto-sync, audit log and more'}, h('input', {type: 'checkbox', checked: S.adv, onchange: e => { S.adv = e.target.checked; LS.set('adv', S.adv ? '1' : null); act(async () => {}); }}), ' Advanced'),
-      !S.home && h('span', {class: 'mute'}, S.email), !S.home && h('button', {class: 'b sec', onclick: signOut}, 'Sign out')),
-    h('main', {}, S.err && h('div', {class: 'err'}, S.err), S.msg && h('div', {class: 'ok-msg'}, S.msg), VIEWS[S.tab]())));
-  scrollTo(0, y);
-}
-
-(async function start() {
-  render();
+async function runJob(steps, title, what, keys) {
+  const devs = targets();
+  if (!devs.length) { toast('Choose at least one device first', 'error'); return; }
   try {
-    const info = await api('GET', '/api/info');
-    S.lite = !!info.lite;
-    if (info.home) { setSession(await api('GET', '/api/home')); S.home = true; }   // local mode: no login
-    if (S.token) await load();
-  } catch (e) { if (S.token && !S.lite) S.token = null; }
+    const r = await api('POST', '/api/jobs', {device_ids: devs.map(d => d.id), steps, title, rollout: S.rollout && devs.length >= 4});
+    toast(`${what} started` + (S.lite ? '' : ` on ${plural(devs.length, 'device')}`) + (r.batches ? ` in ${r.batches.length} stages` : ''), 'ok', {label: 'View activity', href: '#/activity'});
+    await load(); render();
+  } catch (e) { toast(e.message, 'error'); }
+}
+</script>
+<script>
+// =====================================================================================================
+//  shell: sidebar, top bar, router
+// =====================================================================================================
+function logoMark(size = 22) { return h('span', {class: 'ic', style: {color: 'var(--accent)'}}, (() => { const s = h('span'); s.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="m7.5 10 4.5 4.5 4.5-4.5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>`; return s.firstChild; })()); }
+
+function navModel() {
+  const running = S.jobs.filter(j => j.status === 'running' || j.status === 'queued').length;
+  if (S.lite) return [{items: [{id: 'apps', label: 'Apps', icon: 'apps'}, {id: 'system', label: 'This PC', icon: 'monitor'}, {id: 'activity', label: 'Activity', icon: 'activity', n: running || ''}]}];
+  return [
+    {items: [{id: 'overview', label: 'Overview', icon: 'overview'}, {id: 'devices', label: 'Devices', icon: 'server', n: S.devices.length || ''},
+             {id: 'apps', label: 'Apps', icon: 'apps'}, {id: 'activity', label: 'Activity', icon: 'activity', n: running || ''}]},
+    {title: 'Automation', items: [{id: 'profiles', label: 'Profiles', icon: 'layers'}, {id: 'scripts', label: 'Scripts', icon: 'terminal'}, {id: 'automation', label: 'Auto-sync', icon: 'sync'}]},
+    {title: 'Administration', items: [{id: 'audit', label: 'Audit log', icon: 'log'}, {id: 'settings', label: 'Settings', icon: 'settings'}]},
+  ];
+}
+function sidebar(page) {
+  const syncing = S.lite && S.sync.busy;
+  return h('aside', {class: 'side'},
+    h('a', {class: 'brand', href: '#/', style: {textDecoration: 'none'}}, logoMark(22), 'Openite', h('small', {}, S.version ? 'v' + S.version : '')),
+    h('nav', {class: 'nav'}, navModel().map(g => [g.title && h('h6', {}, g.title),
+      g.items.map(i => h('a', {href: '#/' + i.id, class: page === i.id || (page === 'device' && i.id === 'devices') ? 'on' : ''}, ic(i.icon, 17), i.label, i.n ? h('span', {class: 'n'}, i.n) : null))])),
+    h('div', {class: 'side-foot'},
+      S.lite && h('div', {class: 'syncchip'}, syncing ? h('span', {class: 'spin'}) : ic('ok', 15), syncing ? 'Syncing with this PC…' : 'Synced',
+        h('button', {class: 'btn ghost icon sm', title: 'Rescan this PC', onclick: rescan, disabled: syncing}, ic('sync', 14))),
+      h('div', {class: 'row', style: {gap: '4px', justifyContent: 'space-between', flexWrap: 'nowrap'}},
+        !S.lite ? h('div', {class: 'acct'}, ic('user', 15), h('span', {title: S.email}, S.email || '')) : h('span'),
+        h('div', {class: 'row', style: {gap: '2px', flexWrap: 'nowrap'}},
+          h('button', {class: 'btn ghost icon sm', title: 'Theme: ' + S.theme, onclick: cycleTheme}, ic(S.theme === 'dark' ? 'moon' : S.theme === 'light' ? 'sun' : 'monitor', 15)),
+          !S.lite && h('button', {class: 'btn ghost icon sm', title: 'Sign out', onclick: signOut}, ic('logout', 15))))));
+}
+const topbar = (title, sub, actions, crumb) => h('div', {class: 'top'}, h('div', {}, crumb, h('h1', {}, title), sub && h('div', {class: 'sub'}, sub)), h('div', {class: 'actions'}, actions));
+
+function loginView() {
+  const email = h('input', {class: 'input', type: 'email', placeholder: 'you@example.com', autocomplete: 'username', 'data-fk': 'email'});
+  const pw = h('input', {class: 'input', type: 'password', placeholder: 'Password (8+ characters)', autocomplete: 'current-password', 'data-fk': 'pw'});
+  const err = h('div', {class: 'hidden', style: {color: 'var(--bad)', marginBottom: '12px'}});
+  const go_ = mode => async () => { try { setSession(await api('POST', '/api/' + mode, {email: email.value, password: pw.value})); await load(); render(); }
+    catch (e) { err.textContent = e.message; err.classList.remove('hidden'); } };
+  pw.addEventListener('keydown', e => { if (e.key === 'Enter') go_('login')(); });
+  return h('div', {class: 'splash'}, h('div', {class: 'box'},
+    h('div', {class: 'lg'}, h('div', {class: 'mark still'}, logoMark(28)), h('div', {}, h('h1', {}, 'Openite'), h('p', {}, 'Sign in to manage your devices'))),
+    h('div', {class: 'field'}, h('label', {}, 'Email'), email), h('div', {class: 'field'}, h('label', {}, 'Password'), pw), err,
+    h('div', {class: 'row'}, h('button', {class: 'btn primary lg grow', onclick: go_('login')}, 'Sign in'), h('button', {class: 'btn lg', onclick: go_('register')}, 'Create account'))));
+}
+
+const PAGES = {};
+function render() {
+  const root = document.getElementById('root');
+  if (!S.ready) return;
+  const fk = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null;
+  const caret = fk ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+  const scroll = window.scrollY;
+  if (!S.token && !S.lite) { root.replaceChildren(loginView()); return; }
+  let {page} = routeOf();
+  const okPages = S.lite ? ['apps', 'system', 'activity'] : ['overview', 'devices', 'device', 'apps', 'activity', 'profiles', 'scripts', 'automation', 'audit', 'settings'];
+  if (!okPages.includes(page)) page = S.lite ? 'apps' : 'overview';
+  let view;
+  try { view = PAGES[page](); } catch (e) { console.error(e); view = h('div', {class: 'content'}, h('div', {class: 'panel empty'}, h('h3', {}, 'Something went wrong'), h('p', {}, String(e.message)))); }
+  root.replaceChildren(h('div', {class: 'app'}, sidebar(page), h('main', {}, view)));
+  renderDrawer();
+  window.scrollTo(0, scroll);
+  if (fk) { const el = document.querySelector(`[data-fk="${fk}"]`); if (el) { el.focus(); try { el.setSelectionRange(...caret); } catch {} } }
+}
+addEventListener('hashchange', async () => { S.drawer = null; try { await load(); } catch {} render(); window.scrollTo(0, 0); });
+addEventListener('keydown', e => {
+  if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !document.querySelector('#overlay .modal')) { const s = document.querySelector('[data-fk="search"]'); if (s) { e.preventDefault(); s.focus(); } }
+  if (e.key === 'Escape' && S.drawer && !document.querySelector('#overlay .modal')) { S.drawer = null; render(); }
+});
+</script>
+<script>
+// =====================================================================================================
+//  page: apps (catalog + persistent selection panel) and the app drawer
+// =====================================================================================================
+function appCard(a, devs) {
+  const i = appInfo(a, devs), sel = S.sel.apps.has(a.key);
+  const sub = [];
+  if (i.inst) { sub.push(i.out ? h('span', {class: 'up'}, i.avail ? 'Update ' + i.avail : 'Update available') : h('span', {class: 'in'}, 'Installed' + (i.n === 1 && i.ver ? ' ' + i.ver : i.n > 1 ? ` on ${i.inst}/${i.n}` : ''))); if (i.held) sub.push(ic('pause', 12)); }
+  else sub.push(a.category);
+  return h('div', {class: 'card' + (sel ? ' sel' : ''), tabindex: 0, role: 'checkbox', 'aria-checked': sel, title: a.name,
+    onclick: () => { sel ? S.sel.apps.delete(a.key) : S.sel.apps.set(a.key, {version: ''}); render(); },
+    onkeydown: e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.currentTarget.click(); } }},
+    tile(a), h('div', {class: 'mt'}, h('div', {class: 'nm'}, a.name), h('div', {class: 'sb'}, sub)),
+    h('button', {class: 'btn icon sm ghost more', title: 'Details and versions', onclick: e => { e.stopPropagation(); S.drawer = a.key; render(); }}, ic('info', 14)),
+    h('span', {class: 'tick'}, ic('check', 12)));
+}
+function selectionPanel(devs) {
+  const keys = [...S.sel.apps.keys()].filter(k => catOf(k));
+  const n = keys.length, noDev = !devs.length;
+  const devLine = S.lite ? null : h('div', {class: 'pb sel-dev', style: {borderTop: '1px solid var(--line2)', padding: '12px 16px'}},
+    h('div', {class: 'row', style: {marginBottom: '4px'}}, h('b', {style: {fontWeight: 600}}, 'Install on'), h('button', {class: 'btn sm ghost', style: {marginLeft: 'auto'}, onclick: devicePicker}, ic('laptop', 14), devs.length ? 'Change' : 'Choose devices')),
+    devs.length ? h('div', {class: 'sec'}, devs.length <= 3 ? devs.map(d => d.name).join(', ') : `${plural(devs.length, 'device')} selected`) : h('div', {class: 'muted'}, 'No devices selected yet'),
+    devs.length >= 4 && h('label', {class: 'row note', style: {marginTop: '8px', gap: '8px', flexWrap: 'nowrap', cursor: 'pointer'}}, h('input', {type: 'checkbox', checked: S.rollout, onchange: e => { S.rollout = e.target.checked; }}), 'Staged rollout: a few devices first, stop if they fail'));
+  return h('div', {class: 'panel selpanel' + (S.selOpen ? ' open' : '')},
+    h('div', {class: 'ph'}, h('h3', {}, 'Selection'), h('span', {class: 'badge ' + (n ? 'info' : '')}, n),
+      h('div', {class: 'row', style: {marginLeft: 'auto', gap: '4px'}}, n > 0 && h('button', {class: 'btn sm ghost', onclick: () => { S.sel.apps.clear(); render(); }}, 'Clear'),
+        h('button', {class: 'btn sm ghost togg', onclick: () => { S.selOpen = !S.selOpen; render(); }}, ic(S.selOpen ? 'chevron-down' : 'chevron-right', 14), S.selOpen ? 'Hide' : 'Review'))),
+    n === 0 ? h('div', {class: 'pb'}, h('div', {class: 'sec'}, 'Pick apps or a preset.'), h('div', {class: 'note', style: {marginTop: '4px'}}, 'Nothing is installed until you press Install.'))
+      : h('div', {class: 'list'}, keys.map(k => { const a = catOf(k), v = S.sel.apps.get(k).version;
+          return h('div', {class: 'selrow'}, tile(a, 's'), h('span', {class: 'nm'}, a.name), v ? h('span', {class: 'ver', title: 'Change version', onclick: () => { S.drawer = k; render(); }}, v) : null,
+            h('button', {class: 'btn ghost icon sm', title: 'Remove', onclick: () => { S.sel.apps.delete(k); render(); }}, ic('x', 14))); })),
+    devLine,
+    h('div', {class: 'pb', style: {borderTop: '1px solid var(--line2)', padding: '14px 16px 16px'}},
+      h('button', {class: 'btn primary lg block', disabled: !n || noDev, onclick: () => runJob(stepsFor('install', keys), 'Install', 'Install', keys)}, ic('download', 16), n ? `Install ${plural(n, 'app')}` : 'Install'),
+      h('div', {class: 'acts sel-more'},
+        h('button', {class: 'btn sm', disabled: !n || noDev, onclick: () => runJob(stepsFor('upgrade', keys), 'Update', 'Update', keys)}, 'Update'),
+        h('button', {class: 'btn sm', disabled: !n || noDev, title: 'Stop automatic updates for these apps', onclick: () => runJob(stepsFor('pin', keys), 'Hold updates', 'Hold', keys)}, 'Hold'),
+        h('button', {class: 'btn sm danger', disabled: !n || noDev, onclick: async () => { if (await confirmDialog('Uninstall ' + plural(n, 'app') + '?', 'They are removed silently, with no windows to click through.', 'Uninstall', true)) runJob([{type: 'uninstall', apps: keys}], 'Uninstall', 'Uninstall', keys); }}, 'Uninstall')),
+      h('div', {class: 'row sel-more', style: {marginTop: '10px', justifyContent: 'space-between'}},
+        h('button', {class: 'btn sm ghost', disabled: noDev, onclick: () => runJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, ic('sync', 14), 'Update everything'),
+        !S.lite && h('button', {class: 'btn sm ghost', disabled: !n, onclick: () => saveProfileFromSelection(keys)}, ic('layers', 14), 'Save as profile'))));
+}
+PAGES.apps = function () {
+  const devs = targets();
+  const q = S.q.toLowerCase();
+  const lists = {};
+  const info = a => appInfo(a, devs);
+  const tabOk = a => S.tab === 'all' || (S.tab === 'installed' && info(a).inst) || (S.tab === 'updates' && info(a).out) || (S.tab === 'selected' && S.sel.apps.has(a.key));
+  const visible = a => tabOk(a) && (S.cat === 'all' || a.category === S.cat) && (!q || (a.name + ' ' + a.key + ' ' + a.category).toLowerCase().includes(q));
+  const counts = {all: S.catalog.length, installed: S.catalog.filter(a => info(a).inst).length, updates: S.catalog.filter(a => info(a).out).length, selected: S.sel.apps.size};
+  const cats = allCats().filter(c => S.catalog.some(a => a.category === c && visible(a)));
+  const packs = S.packs.map(p => ({p, av: p.apps.filter(k => catOf(k))})).filter(x => x.av.length);
+  const d0 = S.lite ? S.devices[0] : null;
+  const nUp = d0 ? d0.outdated.length : 0;
+
+  const main = h('div', {},
+    h('div', {class: 'presets'}, packs.map(({p, av}) => { const n = av.filter(k => S.sel.apps.has(k)).length, on = n === av.length;
+      return h('button', {class: 'preset' + (on ? ' on' : ''), title: av.map(k => catOf(k).name).join(', '),
+        onclick: () => { av.forEach(k => on ? S.sel.apps.delete(k) : (S.sel.apps.has(k) || S.sel.apps.set(k, {version: ''}))); render(); }},
+        h('span', {class: 'pi'}, ic(PACK_ICON[p.id] || 'package', 17)), h('span', {}, h('b', {}, p.name), h('small', {}, n ? `${n} of ${av.length} selected` : plural(av.length, 'app'))));
+    })),
+    h('div', {class: 'toolbar'},
+      h('div', {class: 'search'}, ic('search', 15), h('input', {class: 'input', 'data-fk': 'search', placeholder: 'Search apps', value: S.q, oninput: e => { S.q = e.target.value; render(); }}), !S.q && h('kbd', {}, '/')),
+      h('select', {class: 'select', style: {width: '190px'}, 'aria-label': 'Category', onchange: e => { S.cat = e.target.value; render(); }},
+        h('option', {value: 'all'}, 'All categories'), allCats().map(c => h('option', {value: c, selected: S.cat === c}, c))),
+      h('div', {class: 'seg', role: 'tablist'}, [['all', 'All'], ['installed', 'Installed'], ['updates', 'Updates'], ['selected', 'Selected']].map(([id, l]) =>
+        h('button', {class: S.tab === id ? 'on' : '', onclick: () => { S.tab = id; render(); }}, l, h('span', {class: 'n'}, counts[id]))))),
+    cats.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No apps match'), h('p', {}, 'Try a different search or filter.'), h('button', {class: 'btn', onclick: () => { S.q = ''; S.tab = 'all'; S.cat = 'all'; render(); }}, 'Reset filters'))
+      : cats.map(c => { const list = S.catalog.filter(a => a.category === c && visible(a));
+          return h('section', {}, h('div', {class: 'cat'}, c, h('span', {}, list.length)), h('div', {class: 'cards'}, list.map(a => appCard(a, devs)))); }));
+
+  const sub = S.lite ? `${S.catalog.length} apps available on ${S.manager || 'this PC'}${d0 ? ` · ${counts.installed} installed` : ''}` : `${S.catalog.length} apps · choose where to install on the right`;
+  return h('div', {}, topbar('Apps', sub, S.lite && nUp ? h('button', {class: 'btn', onclick: () => runJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, ic('arrow-up', 15), `Update ${plural(nUp, 'app')}`) : null),
+    h('div', {class: 'content'}, S.devices.length === 0 && !S.lite ? h('div', {class: 'panel empty'}, h('h3', {}, 'Add a device first'), h('p', {}, 'Openite installs software on devices you enroll. It takes one command.'), h('button', {class: 'btn primary', onclick: addDeviceModal}, 'Add a device'))
+      : h('div', {class: 'apps'}, main, selectionPanel(devs))));
+};
+
+// ---------- app drawer: versions, hold, per-device status
+async function loadVersions(key) {
+  S.versions[key] = {loading: true}; render();
+  try { const r = await api('GET', '/api/versions?key=' + encodeURIComponent(key)); S.versions[key] = r; } catch (e) { S.versions[key] = {error: e.message}; }
+  render();
+}
+function renderDrawer() {
+  document.querySelectorAll('#overlay .drawer, #overlay .scrim.d').forEach(e => e.remove());
+  if (!S.drawer) return;
+  const a = catOf(S.drawer); if (!a) return;
+  const devs = targets(), vinfo = S.versions[a.key] || null, cur = S.sel.apps.get(a.key);
+  const close = () => { S.drawer = null; render(); };
+  const vin = h('input', {class: 'input', list: 'vers', placeholder: 'latest', value: cur ? cur.version : '', 'data-fk': 'ver', style: {fontFamily: 'var(--mono)'}});
+  const setVer = () => { const v = vin.value.trim(); if (v && !/^[A-Za-z0-9][A-Za-z0-9._+~:-]{0,63}$/.test(v)) { toast('That is not a valid version', 'error'); return; } S.sel.apps.set(a.key, {version: v}); toast(v ? `${a.name} ${v} added to your selection` : `${a.name} added to your selection`); close(); };
+  const ids = ['winget', 'brew', 'apt'].filter(m => a[m]);
+  const body = h('div', {class: 'db'},
+    h('h4', {}, S.lite ? 'Status on this PC' : 'Status on selected devices'),
+    devs.length === 0 ? h('div', {class: 'muted'}, 'No devices selected.') : h('table', {class: 'tbl', style: {border: '1px solid var(--line2)', borderRadius: 'var(--rs)', overflow: 'hidden'}},
+      h('tbody', {}, devs.slice(0, 8).map(d => { const i = appInfo(a, [d]);
+        return h('tr', {}, h('td', {}, d.name), h('td', {class: 'mono'}, i.inst ? (d.versions || {})[a.key] || 'installed' : '—'),
+          h('td', {class: 'r'}, !i.inst ? badge('Not installed') : i.out ? badge('Update ' + i.avail, 'warn') : badge('Up to date', 'ok'), i.held ? h('span', {style: {marginLeft: '6px'}}, badge('Held', 'info')) : null)); }))),
+    devs.length > 8 && h('div', {class: 'note', style: {marginTop: '6px'}}, `and ${devs.length - 8} more devices`),
+    h('h4', {}, 'Version'),
+    h('div', {class: 'row', style: {flexWrap: 'nowrap'}}, vin, h('button', {class: 'btn', onclick: setVer}, cur ? 'Update selection' : 'Add to selection')),
+    h('datalist', {id: 'vers'}, ((vinfo && vinfo.versions) || []).slice(0, 60).map(v => h('option', {value: v}))),
+    h('div', {class: 'note', style: {marginTop: '8px'}},
+      vinfo && vinfo.loading ? h('span', {class: 'row', style: {gap: '8px'}}, h('span', {class: 'spin'}), 'Looking up versions…')
+      : vinfo && vinfo.error ? vinfo.error
+      : vinfo && vinfo.supported === false ? `${S.manager || 'This package manager'} can only install the latest version.`
+      : vinfo && vinfo.versions ? `${vinfo.versions.length} versions available. Type or pick one; leave empty for the latest.`
+      : S.lite ? h('span', {}, 'Leave empty for the latest. ', h('a', {href: '#', onclick: e => { e.preventDefault(); loadVersions(a.key); }}, 'Look up available versions'))
+      : 'Leave empty for the latest, or type an exact version such as 2.44.0. Devices install it with their own package manager.'),
+    h('h4', {}, 'Updates'),
+    h('div', {class: 'row'}, h('button', {class: 'btn', disabled: !devs.length, onclick: () => { runJob([{type: 'pin', apps: [a.key]}], 'Hold ' + a.name, 'Hold'); close(); }}, ic('pause', 14), 'Hold updates'),
+      h('button', {class: 'btn', disabled: !devs.length, onclick: () => { runJob([{type: 'unpin', apps: [a.key]}], 'Release ' + a.name, 'Release'); close(); }}, ic('play', 14), 'Release hold')),
+    h('div', {class: 'note', style: {marginTop: '8px'}}, 'A held app is skipped by "Update everything" and scheduled updates until you release it.'),
+    h('h4', {}, 'Package'),
+    h('div', {class: 'kv'}, ids.flatMap(m => [h('div', {}, m), h('div', {class: 'mono'}, a[m])]).concat([h('div', {}, 'Category'), h('div', {}, a.category)])));
+  document.getElementById('overlay').append(h('div', {class: 'scrim d', onclick: close}),
+    h('aside', {class: 'drawer', role: 'dialog', 'aria-label': a.name + ' details'},
+      h('div', {class: 'dh'}, tile(a, 'l'), h('div', {class: 'grow'}, h('h2', {style: {fontSize: '17px', fontWeight: 650}}, a.name), h('div', {class: 'muted'}, a.category)),
+        h('button', {class: 'btn icon ghost', onclick: close, 'aria-label': 'Close'}, ic('x', 17))), body));
+}
+
+// ---------- device picker (fleet)
+function devicePicker() {
+  const picked = new Set(S.sel.devices);
+  openModal({title: 'Choose devices', width: 560, body: m => {
+    const q = h('input', {class: 'input', placeholder: 'Filter by name or tag'});
+    const list = h('div', {style: {border: '1px solid var(--line)', borderRadius: 'var(--rs)', maxHeight: '340px', overflow: 'auto', marginTop: '12px'}});
+    const draw = () => { const t = q.value.toLowerCase(); list.replaceChildren(...S.devices.filter(d => !t || (d.name + ' ' + d.tags.join(' ')).toLowerCase().includes(t)).map(d =>
+      h('label', {class: 'list-row', style: {cursor: 'pointer'}}, h('input', {type: 'checkbox', checked: picked.has(d.id), onchange: e => { e.target.checked ? picked.add(d.id) : picked.delete(d.id); count.textContent = picked.size + ' selected'; }}),
+        dotEl(d.online ? 'ok' : ''), h('span', {class: 'grow name'}, d.name), h('span', {class: 'tags'}, d.tags.map(x => h('span', {class: 'tag'}, x)))))); };
+    const count = h('span', {class: 'muted', style: {marginRight: 'auto'}}, picked.size + ' selected');
+    q.addEventListener('input', draw); draw();
+    m.mb.append(q, h('div', {class: 'row', style: {marginTop: '10px', gap: '6px'}}, h('button', {class: 'btn sm', onclick: () => { S.devices.forEach(d => picked.add(d.id)); draw(); count.textContent = picked.size + ' selected'; }}, 'All'),
+      h('button', {class: 'btn sm', onclick: () => { picked.clear(); draw(); count.textContent = '0 selected'; }}, 'None'),
+      tags().map(t => h('button', {class: 'btn sm', onclick: () => { S.devices.filter(d => d.tags.includes(t)).forEach(d => picked.add(d.id)); draw(); count.textContent = picked.size + ' selected'; }}, '#' + t))), list);
+    m.mf.append(count, h('button', {class: 'btn', onclick: m.close}, 'Cancel'), h('button', {class: 'btn primary', onclick: () => { S.sel.devices = picked; m.close(); render(); }}, 'Use selection'));
+  }});
+}
+</script>
+<script>
+// =====================================================================================================
+//  pages: this PC (system), overview, devices, device detail
+// =====================================================================================================
+const sysRows = (si, d) => {
+  const rows = [];
+  const add = (k, v) => { if (v !== undefined && v !== null && v !== '' && v !== '—') rows.push(h('div', {}, k), h('div', {}, v)); };
+  add('Operating system', [si.os, si.os_version].filter(Boolean).join(' '));
+  add('Model', [si.maker, si.model].filter(Boolean).join(' '));
+  if (si.virtual) add('Virtual machine', si.virtual);
+  add('Processor', si.cpu && `${si.cpu}${si.cores ? ` · ${si.cores} cores` : ''}${si.threads ? ` / ${si.threads} threads` : ''}`);
+  add('Graphics', (si.gpus || []).join(', '));
+  add('Architecture', si.arch);
+  add('Network', (si.ips || []).join(', '));
+  add('Time zone', si.timezone);
+  add('Account', si.user && `${si.user}${si.elevated ? ' (administrator)' : ''}`);
+  if (d) { add('Package manager', d.manager); add('Agent', d.agent_version && 'Openite ' + d.agent_version); }
+  return rows;
+};
+function meter(label, used, total, unit, tone) {   // tone is decided by the caller: 92% of a 4 TB disk is not an emergency
+  if (!total) return null;
+  const pct = Math.round(used / total * 100);
+  return h('div', {style: {marginBottom: '14px'}}, h('div', {class: 'row', style: {justifyContent: 'space-between', marginBottom: '6px'}}, h('span', {}, label), h('span', {class: 'muted'}, `${unit(used)} of ${unit(total)} used · ${pct}%`)), h('div', {class: 'bar ' + tone}, h('i', {style: {width: pct + '%'}})));
+}
+const healthPanel = (si, d) => h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Health')), h('div', {class: 'pb'},
+  meter('Memory', (si.mem_total_mb || 0) - (si.mem_free_mb || 0), si.mem_total_mb, gb,
+    (si.mem_free_mb || 0) / (si.mem_total_mb || 1) < 0.05 ? 'bad' : (si.mem_free_mb || 0) / (si.mem_total_mb || 1) < 0.15 ? 'warn' : ''),
+  meter('System disk', (si.disk_total_gb || 0) - (si.disk_free_gb || 0), si.disk_total_gb, v => v + ' GB',
+    (si.disk_free_gb || 0) < 10 ? 'bad' : (si.disk_free_gb || 0) < 50 && (si.disk_free_gb || 0) / (si.disk_total_gb || 1) < 0.15 ? 'warn' : ''),
+  h('div', {class: 'kv'}, h('div', {}, 'Uptime'), h('div', {}, uptime(si.uptime_s)), d && h('div', {}, 'Last seen'), d && h('div', {}, d.online ? 'Online now' : ago(d.last_seen)))));
+
+PAGES.system = function () {
+  const d = S.devices[0]; if (!d) return h('div', {class: 'content'}, h('div', {class: 'panel empty'}, h('h3', {}, 'No package manager found'), h('p', {}, 'Openite needs winget, Homebrew or apt.')));
+  const si = d.sysinfo || {};
+  const held = d.held.map(catOf).filter(Boolean);
+  const drv = S.hw && S.hw.advice || [];
+  return h('div', {}, topbar(si.hostname || d.name, [si.os, si.model || ''].filter(Boolean).join(' · '),
+      h('button', {class: 'btn', onclick: rescan, disabled: S.sync.busy}, S.sync.busy ? h('span', {class: 'spin'}) : ic('sync', 15), 'Rescan')),
+    h('div', {class: 'content'},
+      h('div', {class: 'stats'},
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Packages'), h('div', {class: 'v'}, d.n_installed), h('div', {class: 'd'}, 'installed via ' + d.manager)),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Updates'), h('div', {class: 'v', style: {color: d.n_upgradable ? 'var(--warn)' : ''}}, d.n_upgradable), h('div', {class: 'd'}, d.n_upgradable ? 'available now' : 'everything is current')),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Held apps'), h('div', {class: 'v'}, held.length), h('div', {class: 'd'}, 'skipped by updates')),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Uptime'), h('div', {class: 'v'}, uptime(si.uptime_s)), h('div', {class: 'd'}, si.mem_total_mb ? gb(si.mem_total_mb) + ' memory' : ''))),
+      h('div', {class: 'grid2'},
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'System')), h('div', {class: 'pb'}, h('div', {class: 'kv'}, sysRows(si, d)))),
+        h('div', {class: 'stack'}, healthPanel(si, null),
+          d.n_upgradable > 0 && h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Updates available'), h('div', {class: 'r'}, h('button', {class: 'btn sm primary', onclick: () => runJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, 'Update all'))),
+            h('div', {class: 'pb flush'}, d.outdated.map(catOf).filter(Boolean).slice(0, 8).map(a => h('div', {class: 'list-row'}, tile(a, 's'), h('span', {class: 'grow name'}, a.name), h('span', {class: 'mono muted'}, (d.versions || {})[a.key] || ''), ic('chevron-right', 14), h('span', {class: 'mono'}, (d.available || {})[a.key] || ''))),
+              d.outdated.length < d.n_upgradable && h('div', {class: 'note', style: {padding: '12px 16px'}}, `${d.n_upgradable - d.outdated.length} more update${d.n_upgradable - d.outdated.length === 1 ? '' : 's'} for programs outside Openite's catalog (Windows components, vendor tools). "Update all" installs those too.`))))),
+      held.length > 0 && h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Held apps'), h('span', {class: 'sub'}, 'Skipped by "Update everything"')),
+        h('div', {class: 'pb flush'}, held.map(a => h('div', {class: 'list-row'}, tile(a, 's'), h('span', {class: 'grow name'}, a.name), h('span', {class: 'mono muted'}, (d.versions || {})[a.key] || ''),
+          h('button', {class: 'btn sm', onclick: () => { S.sel.apps.clear(); S.sel.apps.set(a.key, {version: ''}); runJob([{type: 'unpin', apps: [a.key]}], 'Release ' + a.name, 'Release'); }}, 'Release'))))),
+      drv.length > 0 && h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Drivers and vendor tools'), h('span', {class: 'sub'}, 'Openite never installs raw drivers. It installs the vendor\'s own tool or opens the official page.')),
+        h('div', {class: 'pb flush'}, drv.map(a => h('div', {class: 'list-row'}, ic(a.app_key ? 'wrench' : 'external', 16), h('div', {class: 'grow'}, h('div', {class: 'name'}, a.title), h('div', {class: 'muted'}, a.why)),
+          a.app_key ? h('button', {class: 'btn sm', onclick: () => { S.sel.apps.set(a.app_key, {version: ''}); go('apps'); toast('Added to your selection'); }}, 'Add to selection')
+                    : h('button', {class: 'btn sm', onclick: () => api('POST', '/api/drivers/open', {title: a.title}).catch(e => toast(e.message, 'error'))}, 'Open official page')))))));
+};
+
+PAGES.overview = function () {
+  const o = S.overview;
+  if (!o) return h('div', {}, topbar('Overview', 'Loading…'), h('div', {class: 'content'}, h('div', {class: 'stats'}, [1, 2, 3, 4].map(() => h('div', {class: 'panel skel', style: {height: '96px'}})))));
+  if (!o.devices) return h('div', {}, topbar('Overview'), h('div', {class: 'content'}, h('div', {class: 'panel empty'}, h('h3', {}, 'Welcome to Openite'), h('p', {}, 'Add your first device to see your fleet here.'), h('button', {class: 'btn primary', onclick: addDeviceModal}, ic('plus', 15), 'Add a device'))));
+  const f = o.jobs_24h || {}, failed = f.failed || 0, total = Object.values(f).reduce((a, b) => a + b, 0);
+  const maxPending = Math.max(1, ...o.pending.map(p => p.count)), maxOs = Math.max(1, ...o.by_os.map(p => p.count));
+  return h('div', {}, topbar('Overview', `${plural(o.devices, 'device')} · ${o.ram_total_gb} GB memory in total`, h('button', {class: 'btn primary', onclick: addDeviceModal}, ic('plus', 15), 'Add device')),
+    h('div', {class: 'content'},
+      h('div', {class: 'stats'},
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Devices online'), h('div', {class: 'v'}, o.online, h('small', {}, '/ ' + o.devices)), h('div', {class: 'd'}, o.devices - o.online ? `${o.devices - o.online} offline` : 'all reachable')),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Need updates'), h('div', {class: 'v', style: {color: o.with_updates ? 'var(--warn)' : ''}}, o.with_updates), h('div', {class: 'd'}, 'devices with pending updates')),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Jobs in 24 h'), h('div', {class: 'v'}, total), h('div', {class: 'd'}, failed ? h('span', {style: {color: 'var(--bad)'}}, failed + ' failed') : 'none failed')),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, 'Auto-synced'), h('div', {class: 'v'}, o.managed, h('small', {}, '/ ' + o.devices)), h('div', {class: 'd'}, 'devices follow a profile'))),
+      h('div', {class: 'grid2'},
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Needs attention'), h('span', {class: 'badge ' + (o.attention.length ? 'warn' : 'ok')}, o.attention.length || 'All clear')),
+          o.attention.length ? o.attention.map(a => h('a', {class: 'list-row', href: '#/devices/' + a.id, style: {textDecoration: 'none', color: 'inherit'}}, dotEl('warn'), h('div', {class: 'grow'}, h('div', {class: 'name'}, a.name), h('div', {class: 'muted'}, a.reason)), ic('chevron-right', 15)))
+            : h('div', {class: 'empty'}, 'Nothing needs your attention.')),
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Pending updates by app')),
+          o.pending.length ? h('div', {style: {padding: '8px 0'}}, o.pending.map(p => h('div', {class: 'hbar'}, h('span', {class: 'nm'}, p.name), h('div', {class: 'bar'}, h('i', {style: {width: p.count / maxPending * 100 + '%'}})), h('span', {class: 'ct'}, p.count))))
+            : h('div', {class: 'empty'}, 'Every device is up to date.'))),
+      h('div', {class: 'grid2', style: {marginTop: '16px'}},
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Operating systems')), h('div', {style: {padding: '8px 0'}}, o.by_os.map(p => h('div', {class: 'hbar'}, h('span', {class: 'nm'}, p.name), h('div', {class: 'bar ok'}, h('i', {style: {width: p.count / maxOs * 100 + '%'}})), h('span', {class: 'ct'}, p.count))))),
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Recent failures'), h('a', {href: '#/activity', class: 'r'}, 'All activity')),
+          o.recent_failed.length ? o.recent_failed.map(j => { const d = S.devices.find(x => x.id === j.device_id); return h('a', {class: 'list-row', href: '#/activity', style: {textDecoration: 'none', color: 'inherit'}}, dotEl('bad'), h('div', {class: 'grow'}, h('div', {class: 'name'}, j.title), h('div', {class: 'muted'}, (d ? d.name : 'device ' + j.device_id) + ' · ' + ago(j.finished)))); })
+            : h('div', {class: 'empty'}, 'No failed jobs.')))));
+};
+
+// ---------- devices
+function addDeviceModal() {
+  let reusable = false, code = '';
+  openModal({title: 'Add a device', width: 600, body: m => {
+    const out = h('div'), tagsIn = h('input', {class: 'input', placeholder: 'e.g. prod, dc:eu (optional)'});
+    const origin = location.origin;
+    const draw = () => out.replaceChildren(
+      h('div', {class: 'field'}, h('label', {}, '1. Install Openite on the device'), codeBox('irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1 | iex'), h('span', {class: 'hint'}, 'Windows PowerShell. On Linux or macOS: curl -fsSL …/install.sh | sh')),
+      h('div', {class: 'field'}, h('label', {}, '2. Connect it to this server'), code ? codeBox(`openite enroll --server ${origin} --code ${code}`) : h('div', {class: 'skel', style: {height: '44px'}}),
+        h('span', {class: 'hint'}, reusable ? 'Reusable key: any device can join with it until you stop using it. Treat it like a password.' : 'Single-use code, valid for 15 minutes.')),
+      h('div', {class: 'field'}, h('label', {}, '3. Start it automatically'), codeBox('openite install-service'), h('span', {class: 'hint'}, 'Run from an administrator terminal. The device appears here within seconds.')));
+    const gen = async () => { code = ''; draw(); try { code = (await api('POST', '/api/enroll-code', {reusable, tags: tagsIn.value.split(',').map(s => s.trim()).filter(Boolean)})).code; } catch (e) { toast(e.message, 'error'); } draw(); };
+    const mode = h('div', {class: 'seg', style: {marginBottom: '16px'}}, h('button', {class: 'on', onclick: e => { reusable = false; [...mode.children].forEach(b => b.classList.remove('on')); e.target.classList.add('on'); tagsRow.classList.add('hidden'); gen(); }}, 'One device'),
+      h('button', {onclick: e => { reusable = true; [...mode.children].forEach(b => b.classList.remove('on')); e.target.classList.add('on'); tagsRow.classList.remove('hidden'); gen(); }}, 'Many devices (reusable key)'));
+    const tagsRow = h('div', {class: 'field hidden'}, h('label', {}, 'Tags for devices that join'), tagsIn, h('span', {class: 'hint'}, 'Press Enter to apply.'));
+    tagsIn.addEventListener('keydown', e => { if (e.key === 'Enter') gen(); });
+    m.mb.append(mode, tagsRow, out); draw(); gen();
+    m.mf.append(h('button', {class: 'btn primary', onclick: m.close}, 'Done'));
+  }});
+}
+const devStatus = d => d.online ? h('span', {class: 'row', style: {gap: '7px', flexWrap: 'nowrap'}}, dotEl('ok'), 'Online') : h('span', {class: 'row muted', style: {gap: '7px', flexWrap: 'nowrap'}}, dotEl(''), 'Offline · ' + ago(d.last_seen));
+function syncCell(d) { if (!d.managed) return h('span', {class: 'muted'}, '—'); return d.missing.length ? h('span', {title: d.missing.join(', ')}, badge(plural(d.missing.length, 'difference'), 'warn')) : badge('In sync', 'ok'); }
+
+PAGES.devices = function () {
+  const q = S.devQ.toLowerCase();
+  const list = S.devices.filter(d => (!q || (d.name + ' ' + d.tags.join(' ') + ' ' + (d.sysinfo || {}).os).toLowerCase().includes(q)) && (!S.devTag || d.tags.includes(S.devTag)));
+  const sel = S.sel.devices, allOn = list.length && list.every(d => sel.has(d.id));
+  return h('div', {}, topbar('Devices', `${plural(S.devices.length, 'device')} · ${S.devices.filter(d => d.online).length} online`, h('button', {class: 'btn primary', onclick: addDeviceModal}, ic('plus', 15), 'Add device')),
+    h('div', {class: 'content'},
+      S.devices.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No devices yet'), h('p', {}, 'Enroll a PC, server or VM to start managing it from here.'), h('button', {class: 'btn primary', onclick: addDeviceModal}, 'Add your first device')) : [
+      h('div', {class: 'toolbar'}, h('div', {class: 'search'}, ic('search', 15), h('input', {class: 'input', 'data-fk': 'search', placeholder: 'Search devices', value: S.devQ, oninput: e => { S.devQ = e.target.value; render(); }}), !S.devQ && h('kbd', {}, '/')),
+        tags().length ? h('select', {class: 'select', style: {width: '170px'}, onchange: e => { S.devTag = e.target.value; render(); }}, h('option', {value: ''}, 'All tags'), tags().map(t => h('option', {value: t, selected: S.devTag === t}, '#' + t))) : null,
+        sel.size > 0 && h('div', {class: 'row', style: {marginLeft: 'auto'}}, h('span', {class: 'muted'}, sel.size + ' selected'),
+          h('button', {class: 'btn sm', onclick: () => go('apps')}, ic('download', 14), 'Install apps…'),
+          h('button', {class: 'btn sm', onclick: () => runJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, ic('arrow-up', 14), 'Update all'),
+          h('button', {class: 'btn sm', onclick: async () => { const t = await promptDialog('Add tags', 'Tags (comma separated)', '', 'Added to every selected device'); if (t) { for (const d of S.devices.filter(x => sel.has(x.id))) await api('PUT', '/api/devices/' + d.id, {tags: [...new Set([...d.tags, ...t.split(',').map(s => s.trim()).filter(Boolean)])]}); await load(); render(); toast('Tags added'); } }}, ic('tag', 14), 'Tag…'))),
+      h('div', {class: 'panel tbl-wrap'}, h('table', {class: 'tbl'},
+        h('thead', {}, h('tr', {}, h('th', {class: 'c'}, h('input', {type: 'checkbox', checked: allOn, onchange: e => { list.forEach(d => e.target.checked ? sel.add(d.id) : sel.delete(d.id)); render(); }})), ['Name', 'Status', 'System', 'Tags', 'Updates', 'Sync'].map(t => h('th', {}, t)))),
+        h('tbody', {}, list.map(d => { const si = d.sysinfo || {};
+          return h('tr', {class: 'click', onclick: e => { if (e.target.tagName !== 'INPUT') go('devices/' + d.id); }},
+            h('td', {class: 'c'}, h('input', {type: 'checkbox', checked: sel.has(d.id), onchange: e => { e.target.checked ? sel.add(d.id) : sel.delete(d.id); render(); }})),
+            h('td', {}, h('div', {class: 'name'}, d.name), d.notes ? h('div', {class: 'muted', style: {fontSize: '12px'}}, d.notes) : null),
+            h('td', {}, devStatus(d)), h('td', {}, h('div', {}, [si.os, si.virtual ? 'VM' : ''].filter(Boolean).join(' · ') || d.os || '—'), si.cpu ? h('div', {class: 'muted', style: {fontSize: '12px'}}, `${si.threads || ''} vCPU · ${si.mem_total_mb ? gb(si.mem_total_mb) : ''}`) : null),
+            h('td', {}, h('div', {class: 'tags'}, d.tags.map(t => h('span', {class: 'tag'}, t)))),
+            h('td', {}, d.n_upgradable ? badge(d.n_upgradable + ' available', 'warn') : h('span', {class: 'muted'}, 'Up to date')), h('td', {}, syncCell(d)));
+        }))), list.length === 0 && h('div', {class: 'empty'}, 'No devices match.'))]));
+};
+
+// ---------- device detail
+PAGES.device = function () {
+  const id = +routeOf().id, d = S.devices.find(x => x.id === id);
+  if (!d) return h('div', {}, topbar('Device not found', null, h('a', {class: 'btn', href: '#/devices'}, 'Back to devices')));
+  const tab = S.devTab || 'overview', si = d.sysinfo || {};
+  const tabs = [['overview', 'Overview'], ['software', 'Software'], ['activity', 'Activity'], ['settings', 'Settings']];
+  const crumb = h('div', {class: 'crumb'}, h('a', {href: '#/devices'}, 'Devices'), ic('chevron-right', 13), d.name);
+  let body;
+  if (tab === 'overview') body = h('div', {}, h('div', {class: 'grid2'}, h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'System')), h('div', {class: 'pb'}, h('div', {class: 'kv'}, sysRows(si, d)))),
+      h('div', {class: 'stack'}, healthPanel(si, d), d.notes ? h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Notes')), h('div', {class: 'pb sec', style: {whiteSpace: 'pre-wrap'}}, d.notes)) : null,
+        d.managed ? h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Auto-sync'), d.missing.length ? badge('Out of sync', 'warn') : badge('In sync', 'ok')),
+          d.missing.length ? h('div', {class: 'pb sec'}, 'Differences: ' + d.missing.join(', ')) : h('div', {class: 'pb sec'}, 'This device matches its assigned profiles.')) : null)));
+  else if (tab === 'software') body = softwareTab(d);
+  else if (tab === 'activity') body = jobList(S.jobs.filter(j => j.device_id === d.id));
+  else body = deviceSettings(d);
+  return h('div', {}, topbar(d.name, h('span', {class: 'row', style: {gap: '10px'}}, devStatus(d), d.tags.length ? h('span', {class: 'tags'}, d.tags.map(t => h('span', {class: 'tag'}, t))) : null),
+      [h('button', {class: 'btn', onclick: () => { S.sel.devices = new Set([d.id]); go('apps'); }}, ic('download', 15), 'Install apps'),
+       h('button', {class: 'btn', onclick: () => { S.sel.devices = new Set([d.id]); runJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update'); }}, ic('arrow-up', 15), 'Update all')], crumb),
+    h('div', {class: 'content'}, h('div', {class: 'tabs'}, tabs.map(([t, l]) => h('a', {class: tab === t ? 'on' : '', onclick: () => { S.devTab = t; render(); }}, l))), body));
+};
+function softwareTab(d) {
+  const filter = S.swFilter || 'all';
+  const apps = S.catalog.filter(a => d.have.includes(a.key)).filter(a => filter === 'all' || (filter === 'updates' && d.outdated.includes(a.key)) || (filter === 'held' && (d.held || []).includes(a.key)));
+  const act = (kind, a) => { S.sel.devices = new Set([d.id]); S.sel.apps.clear(); S.sel.apps.set(a.key, {version: ''}); runJob([{type: kind, apps: [a.key]}], `${kind} ${a.name}`, kind === 'upgrade' ? 'Update' : kind === 'pin' ? 'Hold' : kind === 'unpin' ? 'Release' : 'Uninstall'); };
+  return h('div', {}, h('div', {class: 'toolbar'}, h('div', {class: 'seg'}, [['all', 'All'], ['updates', 'Updates'], ['held', 'Held']].map(([id, l]) => h('button', {class: filter === id ? 'on' : '', onclick: () => { S.swFilter = id; render(); }}, l))),
+      h('span', {class: 'muted'}, `${d.have.length} catalog apps · ${Math.max(0, d.n_installed - d.have.length)} other packages not shown`)),
+    h('div', {class: 'panel tbl-wrap'}, apps.length === 0 ? h('div', {class: 'empty'}, 'Nothing to show.') : h('table', {class: 'tbl'}, h('thead', {}, h('tr', {}, ['App', 'Installed', 'Available', ''].map(t => h('th', {}, t)))),
+      h('tbody', {}, apps.map(a => { const held = (d.held || []).includes(a.key), out = d.outdated.includes(a.key);
+        return h('tr', {}, h('td', {}, h('div', {class: 'row', style: {flexWrap: 'nowrap'}}, tile(a, 's'), h('span', {class: 'name'}, a.name), held ? badge('Held', 'info') : null)),
+          h('td', {class: 'mono'}, (d.versions || {})[a.key] || '—'), h('td', {class: 'mono'}, out ? h('span', {style: {color: 'var(--warn)'}}, (d.available || {})[a.key] || 'yes') : h('span', {class: 'muted'}, '—')),
+          h('td', {class: 'r'}, h('div', {class: 'row', style: {justifyContent: 'flex-end', gap: '4px', flexWrap: 'nowrap'}},
+            out && h('button', {class: 'btn sm', onclick: () => act('upgrade', a)}, 'Update'),
+            h('button', {class: 'btn sm ghost', title: held ? 'Allow updates again' : 'Stop updating this app', onclick: () => act(held ? 'unpin' : 'pin', a)}, ic(held ? 'play' : 'pause', 14), held ? 'Release' : 'Hold'),
+            h('button', {class: 'btn sm ghost danger', onclick: async () => { if (await confirmDialog('Uninstall ' + a.name + '?', `Removes it silently from ${d.name}.`, 'Uninstall', true)) act('uninstall', a); }}, ic('trash', 14)))));
+      })))));
+}
+function deviceSettings(d) {
+  const name = h('input', {class: 'input', value: d.name}), notes = h('textarea', {class: 'textarea', rows: 3, style: {fontFamily: 'var(--sans)', fontSize: '14px'}, placeholder: 'Rack, owner, purpose…'}, d.notes);
+  let tg = [...d.tags];
+  const tagBox = h('div', {class: 'tags', style: {marginBottom: '8px'}}), tagIn = h('input', {class: 'input', placeholder: 'Add a tag and press Enter'});
+  const drawTags = () => tagBox.replaceChildren(...tg.map(t => h('span', {class: 'tag', style: {cursor: 'pointer'}, title: 'Remove', onclick: () => { tg = tg.filter(x => x !== t); drawTags(); }}, t + ' ✕')));
+  tagIn.addEventListener('keydown', e => { if (e.key === 'Enter' && tagIn.value.trim()) { tg = [...new Set([...tg, ...tagIn.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)])]; tagIn.value = ''; drawTags(); e.preventDefault(); } });
+  drawTags();
+  const w = (d.settings || {}).maintenance;
+  const on = h('input', {type: 'checkbox', checked: !!w}), st = h('input', {class: 'input', type: 'time', value: w ? w.start : '22:00', style: {width: '130px'}}), en = h('input', {class: 'input', type: 'time', value: w ? w.end : '05:00', style: {width: '130px'}});
+  const save = async () => {
+    try { await api('PUT', '/api/devices/' + d.id, {name: name.value, notes: notes.value, tags: tg, settings: on.checked ? {maintenance: {start: st.value, end: en.value}} : {}}); await load(); render(); toast('Settings saved'); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  return h('div', {class: 'grid2'}, h('div', {class: 'stack'},
+    h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'General')), h('div', {class: 'pb'},
+      h('div', {class: 'field'}, h('label', {}, 'Name'), name), h('div', {class: 'field'}, h('label', {}, 'Tags'), tagBox, tagIn, h('span', {class: 'hint'}, 'Tags group devices for selections, auto-sync rules and scheduled updates.')),
+      h('div', {class: 'field', style: {marginBottom: 0}}, h('label', {}, 'Notes'), notes))),
+    h('div', {class: 'row'}, h('button', {class: 'btn primary', onclick: save}, 'Save changes'))),
+    h('div', {class: 'stack'},
+      h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Maintenance window')), h('div', {class: 'pb'},
+        h('label', {class: 'row', style: {gap: '8px', marginBottom: '12px', cursor: 'pointer'}}, on, 'Only run automatic work in a time window'),
+        h('div', {class: 'row'}, st, h('span', {class: 'muted'}, 'to'), en, h('span', {class: 'muted'}, 'server time')),
+        h('div', {class: 'note', style: {marginTop: '10px'}}, 'Scheduled updates and auto-sync jobs wait for the window. Jobs you start by hand always run right away. Windows may cross midnight (22:00 to 05:00).'))),
+      h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {style: {color: 'var(--bad)'}}, 'Danger zone')), h('div', {class: 'pb'},
+        h('div', {class: 'row'}, h('div', {class: 'grow'}, h('div', {class: 'name'}, 'Remove this device'), h('div', {class: 'muted'}, 'Forgets it here. Stop its agent separately.')),
+          h('button', {class: 'btn danger', onclick: async () => { if (await confirmDialog('Remove ' + d.name + '?', 'Its history is deleted. The agent on the device stops being able to connect.', 'Remove', true)) { await api('DELETE', '/api/devices/' + d.id); S.sel.devices.delete(d.id); go('devices'); toast('Device removed'); } }}, 'Remove'))))));
+}
+</script>
+<script>
+// =====================================================================================================
+//  pages: activity, profiles, scripts, automation, audit, settings
+// =====================================================================================================
+function jobList(jobs) {
+  const dn = id => (S.devices.find(d => d.id === id) || {name: 'device ' + id}).name;
+  const tone = {done: 'ok', failed: 'bad', halted: 'bad', running: 'warn', queued: '', cancelled: ''};
+  const word = {queued: 'Waiting', running: 'Running', done: 'Finished', failed: 'Failed', halted: 'Not started', cancelled: 'Cancelled'};
+  if (!jobs.length) return h('div', {class: 'panel empty'}, h('h3', {}, 'No activity yet'), h('p', {}, 'Installs, updates and automatic jobs show up here with their full output.'));
+  return h('div', {class: 'panel'}, jobs.map(j => { const open = S.openJob === j.id;
+    return h('div', {class: 'job'}, h('div', {class: 'jh', onclick: () => { S.openJob = open ? null : j.id; render(); }},
+      j.status === 'running' ? h('span', {class: 'spin'}) : dotEl(tone[j.status]), h('div', {class: 'grow'}, h('div', {class: 'name'}, j.title, j.source !== 'manual' ? h('span', {style: {marginLeft: '8px', fontWeight: 400}}, badge(j.source === 'reconcile' ? 'auto-sync' : j.source, '')) : null, j.rollout_id ? h('span', {style: {marginLeft: '6px', fontWeight: 400}}, badge('stage ' + (j.batch + 1))) : null),
+        h('div', {class: 'muted'}, (S.lite ? '' : dn(j.device_id) + ' · ') + clock(j.created) + (j.finished ? ' · ' + dur(j.started, j.finished) : ''))),
+      badge(word[j.status] || j.status, tone[j.status]),
+      ['queued', 'halted'].includes(j.status) && h('button', {class: 'btn sm', onclick: e => { e.stopPropagation(); api('POST', `/api/jobs/${j.id}/cancel`).then(() => load().then(render)); }}, 'Cancel'),
+      ic(open ? 'chevron-down' : 'chevron-right', 16)),
+      open && h('div', {class: 'jb'}, h('div', {class: 'log'}, j.log || (j.status === 'queued' ? 'Waiting for the device to pick this up.' : j.status === 'running' ? 'Working… installs can take a few minutes. Windows may ask for permission.' : '(no output)')))); }));
+}
+PAGES.activity = function () {
+  const f = S.jobFilter, jobs = S.jobs.filter(j => f === 'all' || (f === 'active' && ['running', 'queued'].includes(j.status)) || (f === 'failed' && ['failed', 'halted'].includes(j.status)));
+  return h('div', {}, topbar('Activity', `${plural(S.jobs.length, 'job')} recorded`), h('div', {class: 'content'},
+    h('div', {class: 'toolbar'}, h('div', {class: 'seg'}, [['all', 'All'], ['active', 'Active'], ['failed', 'Failed']].map(([id, l]) => h('button', {class: f === id ? 'on' : '', onclick: () => { S.jobFilter = id; render(); }}, l)))), jobList(jobs)));
+};
+
+// ---------- profiles
+function profileEditor(p, presetKeys) {
+  const entries = (p ? p.apps : (presetKeys || []).map(k => ({key: k, version: (S.sel.apps.get(k) || {}).version || ''}))).map(e => ({...e}));
+  let name = p ? p.name : '', scripts = new Set(p ? p.script_ids : []);
+  openModal({title: p ? 'Edit profile' : 'New profile', width: 600, body: m => {
+    const nm = h('input', {class: 'input', value: name, placeholder: 'e.g. Developer workstation'});
+    const list = h('div', {style: {border: '1px solid var(--line)', borderRadius: 'var(--rs)', maxHeight: '280px', overflow: 'auto'}});
+    const add = h('select', {class: 'select'}, h('option', {value: ''}, 'Add an app…'), S.catalog.map(a => h('option', {value: a.key}, a.name)));
+    const draw = () => list.replaceChildren(...(entries.length ? entries.map((e, i) => { const a = catOf(e.key); return h('div', {class: 'list-row', style: {padding: '6px 12px'}}, a ? tile(a, 's') : null, h('span', {class: 'grow name'}, a ? a.name : e.key),
+      h('input', {class: 'input', style: {width: '130px', fontFamily: 'var(--mono)'}, placeholder: 'latest', value: e.version, oninput: ev => { e.version = ev.target.value.trim(); }, title: 'Exact version (optional)'}),
+      h('button', {class: 'btn ghost icon sm', onclick: () => { entries.splice(i, 1); draw(); }}, ic('x', 14))); }) : [h('div', {class: 'empty', style: {padding: '20px'}}, 'No apps yet.')]));
+    add.addEventListener('change', () => { if (add.value && !entries.some(e => e.key === add.value)) entries.push({key: add.value, version: ''}); add.value = ''; draw(); });
+    draw();
+    m.mb.append(h('div', {class: 'field'}, h('label', {}, 'Name'), nm), h('div', {class: 'field'}, h('label', {}, 'Apps'), list, add, h('span', {class: 'hint'}, 'Give an app a version to pin every device to exactly that release.')),
+      S.scripts.length ? h('div', {class: 'field'}, h('label', {}, 'Setup scripts after installing'), S.scripts.map(s => h('label', {class: 'row', style: {gap: '8px', cursor: 'pointer'}}, h('input', {type: 'checkbox', checked: scripts.has(s.id), onchange: e => { e.target.checked ? scripts.add(s.id) : scripts.delete(s.id); }}), s.name, h('span', {class: 'muted'}, s.shell)))) : null);
+    m.mf.append(h('button', {class: 'btn', onclick: m.close}, 'Cancel'), h('button', {class: 'btn primary', onclick: async () => {
+      if (!nm.value.trim()) { toast('Give the profile a name', 'error'); return; }
+      try { const body = {name: nm.value.trim(), apps: entries, script_ids: [...scripts]}; p ? await api('PUT', '/api/profiles/' + p.id, body) : await api('POST', '/api/profiles', body); m.close(); await load(); render(); toast('Profile saved'); } catch (e) { toast(e.message, 'error'); } }}, 'Save profile'));
+  }});
+}
+const saveProfileFromSelection = keys => profileEditor(null, keys);
+PAGES.profiles = function () {
+  return h('div', {}, topbar('Profiles', 'Reusable sets of apps, optionally pinned to exact versions', h('button', {class: 'btn primary', onclick: () => profileEditor(null)}, ic('plus', 15), 'New profile')),
+    h('div', {class: 'content'}, S.profiles.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No profiles yet'), h('p', {}, 'Pick apps on the Apps page and choose "Save as profile", or create one here.'), h('button', {class: 'btn primary', onclick: () => profileEditor(null)}, 'Create a profile'))
+      : h('div', {class: 'grid2'}, S.profiles.map(p => h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, p.name), h('span', {class: 'sub'}, plural(p.apps.length, 'app')), h('div', {class: 'r'},
+          h('button', {class: 'btn sm', onclick: () => profileEditor(p)}, ic('edit', 13), 'Edit'),
+          h('button', {class: 'btn sm ghost danger', onclick: async () => { if (await confirmDialog('Delete ' + p.name + '?', 'Rules that use it are removed too.', 'Delete', true)) { await api('DELETE', '/api/profiles/' + p.id); await load(); render(); } }}, ic('trash', 14)))),
+        h('div', {class: 'pb'}, h('div', {class: 'row', style: {gap: '6px'}}, p.apps.slice(0, 12).map(e => { const a = catOf(e.key); return a ? h('span', {class: 'row', style: {gap: '6px', flexWrap: 'nowrap', padding: '2px 8px 2px 2px', border: '1px solid var(--line)', borderRadius: '99px'}}, tile(a, 's'), a.name, e.version ? h('span', {class: 'mono muted'}, e.version) : null) : null; }),
+          p.apps.length > 12 && h('span', {class: 'muted'}, `+${p.apps.length - 12} more`))),
+        h('div', {class: 'pb', style: {borderTop: '1px solid var(--line2)'}}, h('button', {class: 'btn sm', onclick: () => { S.profileApply = p; devicePickerThen(p); }}, ic('play', 13), 'Apply to devices')))))));
+};
+function devicePickerThen(p) { devicePicker(); const t = setInterval(() => { if (!document.querySelector('#overlay .modal')) { clearInterval(t); if (S.sel.devices.size) runJob([{type: 'profile', profile_id: p.id}], 'Profile: ' + p.name, 'Profile'); } }, 250); }
+
+// ---------- scripts
+function scriptModal() {
+  openModal({title: 'New setup script', width: 620, body: m => {
+    const nm = h('input', {class: 'input', placeholder: 'e.g. Configure git'}), sh = h('select', {class: 'select', style: {width: '150px'}}, ['powershell', 'bash', 'cmd'].map(s => h('option', {}, s))), body = h('textarea', {class: 'textarea', rows: 10, placeholder: 'git config --global user.name "Me"'});
+    m.mb.append(h('div', {class: 'field'}, h('label', {}, 'Name'), nm), h('div', {class: 'field'}, h('label', {}, 'Shell'), sh), h('div', {class: 'field'}, h('label', {}, 'Script'), body, h('span', {class: 'hint'}, 'Runs on devices with the agent\'s permissions. Only add scripts you trust.')));
+    m.mf.append(h('button', {class: 'btn', onclick: m.close}, 'Cancel'), h('button', {class: 'btn primary', onclick: async () => { try { await api('POST', '/api/scripts', {name: nm.value, shell: sh.value, body: body.value}); m.close(); await load(); render(); toast('Script saved'); } catch (e) { toast(e.message, 'error'); } }}, 'Save script'));
+  }});
+}
+PAGES.scripts = function () {
+  return h('div', {}, topbar('Scripts', 'Setup scripts that run on devices after installs', h('button', {class: 'btn primary', onclick: scriptModal}, ic('plus', 15), 'New script')),
+    h('div', {class: 'content'}, S.scripts.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No scripts yet'), h('p', {}, 'Scripts configure a device after installing apps: git settings, folders, registry tweaks.'), h('button', {class: 'btn primary', onclick: scriptModal}, 'Write a script'))
+      : h('div', {class: 'stack'}, S.scripts.map(s => h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, s.name), badge(s.shell), h('div', {class: 'r'},
+          h('button', {class: 'btn sm', onclick: () => { devicePicker(); const t = setInterval(() => { if (!document.querySelector('#overlay .modal')) { clearInterval(t); if (S.sel.devices.size) runJob([{type: 'script', script_id: s.id}], 'Script: ' + s.name, 'Script'); } }, 250); }}, ic('play', 13), 'Run on devices'),
+          h('button', {class: 'btn sm ghost danger', onclick: async () => { if (await confirmDialog('Delete ' + s.name + '?', 'This cannot be undone.', 'Delete', true)) { await api('DELETE', '/api/scripts/' + s.id); await load(); render(); } }}, ic('trash', 14)))),
+        h('div', {class: 'pb'}, h('div', {class: 'log', style: {maxHeight: '160px'}}, s.body)))))));
+};
+
+// ---------- automation: auto-sync rules + schedules
+PAGES.automation = function () {
+  const pname = id => (S.profiles.find(p => p.id === id) || {name: '(deleted)'}).name;
+  const tag = h('select', {class: 'select', style: {width: '180px'}}, h('option', {value: 'all'}, 'All devices'), tags().map(t => h('option', {value: t}, '#' + t)));
+  const prof = h('select', {class: 'select', style: {width: '200px'}}, S.profiles.map(p => h('option', {value: p.id}, p.name)));
+  const au = h('input', {type: 'checkbox'});
+  const stag = h('select', {class: 'select', style: {width: '180px'}}, h('option', {value: 'all'}, 'All devices'), tags().map(t => h('option', {value: t}, '#' + t)));
+  const time = h('input', {class: 'input', type: 'time', value: '03:00', style: {width: '120px'}}), ro = h('input', {type: 'checkbox', checked: true});
+  const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], boxes = DAYS.map(d => h('label', {class: 'row', style: {gap: '4px', cursor: 'pointer'}}, h('input', {type: 'checkbox', value: d}), d));
+  return h('div', {}, topbar('Auto-sync', 'Keep devices matching a profile, and update them on a schedule'),
+    h('div', {class: 'content stack'},
+      h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Profile rules'), h('span', {class: 'sub'}, 'Devices with a tag always have the apps of a profile, including new devices that join later')),
+        S.profiles.length === 0 ? h('div', {class: 'pb sec'}, 'Create a profile first, on the Profiles page.') : h('div', {class: 'pb row'}, 'Devices in', tag, 'should have', prof, h('label', {class: 'row', style: {gap: '6px', cursor: 'pointer'}}, au, 'keep them updated'),
+          h('button', {class: 'btn primary', onclick: async () => { try { await api('POST', '/api/assignments', {tag: tag.value, profile_id: +prof.value, auto_update: au.checked}); await load(); render(); toast('Rule added'); } catch (e) { toast(e.message, 'error'); } }}, 'Add rule')),
+        S.assignments.map(a => h('div', {class: 'list-row'}, ic('sync', 16), h('div', {class: 'grow'}, 'Devices in ', h('b', {}, a.tag === 'all' ? 'all devices' : '#' + a.tag), ' keep ', h('b', {}, pname(a.profile_id)), a.auto_update ? ' installed and updated' : ' installed'),
+          h('button', {class: 'btn sm ghost danger', onclick: async () => { await api('DELETE', '/api/assignments/' + a.id); await load(); render(); }}, ic('trash', 14))))),
+      h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Scheduled updates'), h('span', {class: 'sub'}, 'Update everything on a group of devices at a set time (server time). Held apps are skipped.')),
+        h('div', {class: 'pb row'}, 'Update', stag, 'at', time, h('div', {class: 'row', style: {gap: '10px'}}, boxes), h('label', {class: 'row', style: {gap: '6px', cursor: 'pointer'}}, ro, 'staged rollout'),
+          h('button', {class: 'btn primary', onclick: async () => { try { await api('POST', '/api/schedules', {tag: stag.value, time: time.value, days: boxes.map(b => b.firstChild).filter(i => i.checked).map(i => i.value), rollout: ro.checked}); await load(); render(); toast('Schedule added'); } catch (e) { toast(e.message, 'error'); } }}, 'Add schedule')),
+        h('div', {class: 'note', style: {padding: '0 16px 12px'}}, 'No days ticked means every day. Devices with a maintenance window wait for it.'),
+        S.schedules.map(x => h('div', {class: 'list-row'}, ic('calendar', 16), h('div', {class: 'grow'}, 'Update ', h('b', {}, x.tag === 'all' ? 'all devices' : '#' + x.tag), ' at ', h('b', {}, x.time), x.days.length ? ' on ' + x.days.join(', ') : ' every day', x.rollout ? ' (staged)' : ''),
+          h('button', {class: 'btn sm ghost danger', onclick: async () => { await api('DELETE', '/api/schedules/' + x.id); await load(); render(); }}, ic('trash', 14)))))));
+};
+
+PAGES.audit = function () {
+  return h('div', {}, topbar('Audit log', 'Who did what, latest first'), h('div', {class: 'content'}, h('div', {class: 'panel tbl-wrap'}, S.audit.length === 0 ? h('div', {class: 'empty'}, 'Nothing recorded yet.') :
+    h('table', {class: 'tbl'}, h('thead', {}, h('tr', {}, ['When', 'Who', 'Action', 'Details'].map(t => h('th', {}, t)))),
+      h('tbody', {}, S.audit.map(a => h('tr', {}, h('td', {class: 'muted', style: {whiteSpace: 'nowrap'}}, clock(a.ts)), h('td', {}, a.actor), h('td', {}, h('span', {class: 'mono'}, a.action)), h('td', {class: 'sec'}, a.detail))))))));
+};
+
+// ---------- server settings
+PAGES.settings = function () {
+  const s = S.settings; if (!s) return h('div', {}, topbar('Settings'), h('div', {class: 'content'}, h('div', {class: 'panel skel', style: {height: '200px'}})));
+  const dis = !s.is_admin;
+  const reg = h('input', {type: 'checkbox', checked: s.registration, disabled: dis}), poll = h('input', {class: 'input', type: 'number', min: 5, max: 300, value: s.poll_interval, style: {width: '110px'}, disabled: dis}),
+    ret = h('input', {class: 'input', type: 'number', min: 7, max: 3650, value: s.retention_days, style: {width: '110px'}, disabled: dis});
+  const save = async () => { try { await api('PUT', '/api/settings', {registration: reg.checked, poll_interval: +poll.value, retention_days: +ret.value}); await load(); render(); toast('Settings saved'); } catch (e) { toast(e.message, 'error'); } };
+  return h('div', {}, topbar('Settings', 'Server-wide options', h('button', {class: 'btn primary', disabled: dis, onclick: save}, 'Save changes')),
+    h('div', {class: 'content'}, dis ? h('div', {class: 'panel', style: {marginBottom: '16px'}}, h('div', {class: 'pb row'}, ic('lock', 16), 'Only the administrator (the first account created on this server) can change these settings.')) : null,
+      h('div', {class: 'grid2'}, h('div', {class: 'stack'},
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Access')), h('div', {class: 'pb'}, h('label', {class: 'row', style: {gap: '10px', cursor: 'pointer', alignItems: 'flex-start', flexWrap: 'nowrap'}}, reg, h('span', {}, h('b', {}, 'Allow new accounts to register'), h('div', {class: 'muted'}, 'Turn this off once your team has accounts, so strangers cannot sign up.'))))),
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Agents')), h('div', {class: 'pb'}, h('div', {class: 'field', style: {marginBottom: 0}}, h('label', {}, 'Check-in interval'), h('div', {class: 'row'}, poll, h('span', {class: 'muted'}, 'seconds')), h('span', {class: 'hint'}, 'How often devices ask for work. Lower is snappier; higher is lighter on big fleets. Agents adopt a change within one interval.')))),
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Data')), h('div', {class: 'pb'}, h('div', {class: 'field', style: {marginBottom: 0}}, h('label', {}, 'Keep job history'), h('div', {class: 'row'}, ret, h('span', {class: 'muted'}, 'days')), h('span', {class: 'hint'}, 'Older finished jobs are deleted automatically. The audit log keeps 365 days.'))))),
+        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'About this server')), h('div', {class: 'pb'}, h('div', {class: 'kv'},
+          h('div', {}, 'Version'), h('div', {}, s.version), h('div', {}, 'Server time'), h('div', {}, s.server_time.replace('T', ' ')), h('div', {}, 'Time zone'), h('div', {}, s.timezone), h('div', {}, 'Accounts'), h('div', {}, s.accounts), h('div', {}, 'Your role'), h('div', {}, s.is_admin ? 'Administrator' : 'Member')))))));
+};
+</script>
+<script>
+// =====================================================================================================
+//  start-up: read the machine (local mode) with a real progress display, then show the app
+// =====================================================================================================
+function setSplash(msg, steps) {
+  const m = document.getElementById('splash-msg'), ul = document.getElementById('splash-steps'); if (!m || !ul) return;
+  m.textContent = msg;
+  ul.replaceChildren(...steps.map(s => h('li', {class: s.status}, s.status === 'done' ? h('span', {class: 'ok'}, ic('ok', 16)) : h('span', {class: 'spin'}), s.name)));
+}
+async function start() {
+  applyTheme();
+  let info;
+  try { info = await api('GET', '/api/info'); } catch { setSplash('Cannot reach the Openite server', []); return; }
+  S.lite = !!info.lite; S.version = info.version; S.manager = info.manager || '';
+  if (info.home) setSession(await api('GET', '/api/home'));
+  if (S.lite) {
+    setSplash('Reading this PC…', []);
+    for (let i = 0; i < 600; i++) {   // up to ~4 minutes; winget can be slow on first run
+      const s = await api('GET', '/api/sync'); S.sync = s;
+      setSplash(s.ready ? 'Ready' : 'Reading this PC…', s.steps.map(x => ({name: x.name, status: s.ready ? 'done' : x.status})));
+      if (s.ready) break; await new Promise(r => setTimeout(r, 400));
+    }
+  }
+  if (S.token) { try { S.icons = new Set(await api('GET', '/api/icons')); await load(); } catch { if (!S.lite) S.token = null; } }
   S.ready = true; render();
-  setInterval(() => { if (S.token && !document.activeElement?.matches('input,textarea,select')) load().then(render).catch(() => {}); }, 4000);
-})();
+  setInterval(poll, S.lite ? 3000 : 5000);
+}
+start();
 </script>
 </body>
 </html>

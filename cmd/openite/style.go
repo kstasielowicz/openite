@@ -42,10 +42,17 @@ func banner(sub string) {
 func okMark() string   { return green("✔") }
 func failMark() string { return red("✘") }
 
-// spinner runs fn while animating a one-line spinner with a label; returns fn's result.
+func sleepMs(n int) { time.Sleep(time.Duration(n) * time.Millisecond) }
+
+// withSpinner runs fn while animating a one-line spinner with a label; returns fn's result.
 func withSpinner(label string, fn func() bool) bool {
+	return withSpinnerDyn(func() string { return label }, fn)
+}
+
+// withSpinnerDyn is withSpinner with a label that can change while the work runs (progress stages).
+func withSpinnerDyn(label func() string, fn func() bool) bool {
 	if !interactive {
-		fmt.Printf("%s … ", label)
+		fmt.Printf("%s ... ", label())
 		ok := fn()
 		if ok {
 			fmt.Println("done")
@@ -64,13 +71,11 @@ func withSpinner(label string, fn func() bool) bool {
 			if !ok {
 				mark = failMark()
 			}
-			fmt.Printf("\r\x1b[2K  %s %s\n", mark, label)
+			fmt.Printf("\r\x1b[2K  %s %s\n", mark, label())
 			return ok
 		default:
-			fmt.Printf("\r\x1b[2K  %s %s", cyan(frames[i%len(frames)]), label)
+			fmt.Printf("\r\x1b[2K  %s %s", cyan(frames[i%len(frames)]), label()+" …")
 			sleepMs(80)
 		}
 	}
 }
-
-func sleepMs(n int) { time.Sleep(time.Duration(n) * time.Millisecond) }

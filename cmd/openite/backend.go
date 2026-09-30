@@ -17,12 +17,16 @@ import (
 // agent never goes through a shell.
 type Backend interface {
 	Name() string
-	Install(pkg string) [][]string
+	Install(pkg, version string) [][]string // version "" = latest
 	Uninstall(pkg string) [][]string
-	Upgrade(pkg string) [][]string // pkg == "" upgrades everything
+	Upgrade(pkg, version string) [][]string // pkg == "" upgrades everything (held packages are skipped by the manager)
+	Pin(pkg string) [][]string              // hold: bulk updates skip it
+	Unpin(pkg string) [][]string
+	SupportsVersions() bool
 	OK(code int) bool
 	Env() []string
-	Inventory() catalog.Inventory
+	// Inventory reads what is installed. progress (may be nil) is told the stage name as work proceeds.
+	Inventory(progress func(stage string)) catalog.Inventory
 }
 
 var dryRun = os.Getenv("OPENITE_DRY_RUN") != ""
@@ -72,12 +76,16 @@ func pickBackend() Backend {
 	return nil
 }
 
-// ---- winget ---------------------------------------------------------------
+func stage(progress func(string), name string) {
+	if progress != nil {
+		progress(name)
+	}
+}
 
-type winget struct{}
-
-var wingetBase = []string{"--accept-source-agreements", "--disable-interactivity"}
-var wingetPkg = []string{"--accept-package-agreements", "--silent"}
+func newInventory() catalog.Inventory {
+	return catalog.Inventory{Installed: map[string]string{}, Upgradable: map[string]string{}, Names: map[string]string{},
+		UpgradableNames: map[string]string{}, Pinned: map[string]string{}, PinnedNames: map[string]string{}}
+}
 
 func cat(parts ...[]string) []string {
 	var out []string
@@ -87,20 +95,41 @@ func cat(parts ...[]string) []string {
 	return out
 }
 
-func (winget) Available() bool { return have("winget") }
-func (winget) Name() string    { return "winget" }
-func (winget) Env() []string   { return nil }
-func (winget) Install(p string) [][]string {
-	return [][]string{cat([]string{"winget", "install", "--id", p, "-e"}, wingetPkg, wingetBase)}
+// ---- winget ---------------------------------------------------------------
+
+type winget struct{}
+
+var wingetBase = []string{"--accept-source-agreements", "--disable-interactivity"}
+var wingetPkg = []string{"--accept-package-agreements", "--silent"}
+
+func withVersion(v string) []string {
+	if v == "" {
+		return nil
+	}
+	return []string{"--version", v}
+}
+
+func (winget) Available() bool        { return have("winget") }
+func (winget) Name() string           { return "winget" }
+func (winget) Env() []string          { return nil }
+func (winget) SupportsVersions() bool { return true }
+func (winget) Install(p, v string) [][]string {
+	return [][]string{cat([]string{"winget", "install", "--id", p, "-e"}, withVersion(v), wingetPkg, wingetBase)}
 }
 func (winget) Uninstall(p string) [][]string {
 	return [][]string{cat([]string{"winget", "uninstall", "--id", p, "-e", "--silent"}, wingetBase)}
 }
-func (winget) Upgrade(p string) [][]string {
+func (winget) Upgrade(p, v string) [][]string {
 	if p == "" {
 		return [][]string{cat([]string{"winget", "upgrade", "--all"}, wingetPkg, wingetBase)}
 	}
-	return [][]string{cat([]string{"winget", "upgrade", "--id", p, "-e"}, wingetPkg, wingetBase)}
+	return [][]string{cat([]string{"winget", "upgrade", "--id", p, "-e"}, withVersion(v), wingetPkg, wingetBase)}
+}
+func (winget) Pin(p string) [][]string {
+	return [][]string{cat([]string{"winget", "pin", "add", "--id", p, "-e"}, wingetBase)}
+}
+func (winget) Unpin(p string) [][]string {
+	return [][]string{cat([]string{"winget", "pin", "remove", "--id", p, "-e"}, wingetBase)}
 }
 
 // OK: success, "no applicable update" and "already installed" all count as fine (idempotent).
@@ -109,9 +138,10 @@ func (winget) OK(code int) bool {
 	return c == 0 || c == -1978335189 || c == -1978335135
 }
 
-func (winget) Inventory() catalog.Inventory {
-	inv := catalog.Inventory{Installed: map[string]string{}, Upgradable: map[string]string{}, Names: map[string]string{}, UpgradableNames: map[string]string{}}
-	_, out := run(cat([]string{"winget", "list"}, wingetBase), nil, 5*time.Minute)
+func (winget) Inventory(progress func(string)) catalog.Inventory {
+	inv := newInventory()
+	stage(progress, "Reading installed apps")
+	_, out := probe(cat([]string{"winget", "list"}, wingetBase), nil, 5*time.Minute)
 	for _, r := range parseTable(out) {
 		if r["Id"] != "" {
 			inv.Installed[r["Id"]] = r["Version"]
@@ -120,13 +150,24 @@ func (winget) Inventory() catalog.Inventory {
 			inv.Names[r["Name"]] = r["Version"]
 		}
 	}
-	_, out = run(cat([]string{"winget", "upgrade"}, wingetBase), nil, 5*time.Minute)
+	stage(progress, "Checking for updates")
+	_, out = probe(cat([]string{"winget", "upgrade"}, wingetBase), nil, 5*time.Minute)
 	for _, r := range parseTable(out) {
 		if r["Id"] != "" {
 			inv.Upgradable[r["Id"]] = r["Available"]
 		}
 		if r["Name"] != "" {
 			inv.UpgradableNames[r["Name"]] = r["Available"]
+		}
+	}
+	stage(progress, "Reading held packages")
+	_, out = probe(cat([]string{"winget", "pin", "list"}, wingetBase), nil, time.Minute)
+	for _, r := range parseTable(out) {
+		if r["Id"] != "" {
+			inv.Pinned[r["Id"]] = r["Version"]
+		}
+		if r["Name"] != "" {
+			inv.PinnedNames[r["Name"]] = r["Version"]
 		}
 	}
 	return inv
@@ -191,61 +232,102 @@ func parseTable(text string) []map[string]string {
 	return rows
 }
 
+// versionList parses `winget show --id X --versions`: a header, a dashed line, then one version per line (newest first).
+func versionList(out string) []string {
+	var vs []string
+	past := false
+	for _, l := range strings.Split(strings.ReplaceAll(out, "\r", ""), "\n") {
+		t := strings.TrimSpace(l)
+		if !past {
+			if len(t) > 3 && strings.Trim(t, "-") == "" {
+				past = true
+			}
+			continue
+		}
+		if t != "" && catalog.SafeVersion.MatchString(t) {
+			vs = append(vs, t)
+		}
+	}
+	return vs
+}
+
 // ---- apt ------------------------------------------------------------------
 
 type apt struct{}
 
-func (apt) Available() bool { return have("apt-get") }
-func (apt) Name() string    { return "apt" }
-func (apt) Env() []string   { return []string{"DEBIAN_FRONTEND=noninteractive"} }
+func (apt) Available() bool        { return have("apt-get") }
+func (apt) Name() string           { return "apt" }
+func (apt) Env() []string          { return []string{"DEBIAN_FRONTEND=noninteractive"} }
+func (apt) SupportsVersions() bool { return true }
 func (apt) sudo() []string {
 	if os.Geteuid() == 0 {
 		return nil
 	}
 	return []string{"sudo", "-n"}
 }
-func (a apt) Install(p string) [][]string {
+func (a apt) Install(p, v string) [][]string {
+	if v != "" {
+		return [][]string{cat(a.sudo(), []string{"apt-get", "install", "-y", "--allow-downgrades", p + "=" + v})}
+	}
 	return [][]string{cat(a.sudo(), []string{"apt-get", "install", "-y", p})}
 }
 func (a apt) Uninstall(p string) [][]string {
 	return [][]string{cat(a.sudo(), []string{"apt-get", "remove", "-y", p})}
 }
-func (a apt) Upgrade(p string) [][]string {
+func (a apt) Upgrade(p, v string) [][]string {
+	if p != "" && v != "" {
+		return a.Install(p, v)
+	}
 	if p != "" {
 		return [][]string{cat(a.sudo(), []string{"apt-get", "install", "-y", "--only-upgrade", p})}
 	}
 	return [][]string{cat(a.sudo(), []string{"apt-get", "update"}), cat(a.sudo(), []string{"apt-get", "upgrade", "-y"})}
 }
+func (a apt) Pin(p string) [][]string {
+	return [][]string{cat(a.sudo(), []string{"apt-mark", "hold", p})}
+}
+func (a apt) Unpin(p string) [][]string {
+	return [][]string{cat(a.sudo(), []string{"apt-mark", "unhold", p})}
+}
 func (apt) OK(c int) bool { return c == 0 }
-func (apt) Inventory() catalog.Inventory {
-	_, out := run([]string{"dpkg-query", "-W", "-f", "${Package} ${Version}\n"}, nil, time.Minute)
-	inst := map[string]string{}
+func (apt) Inventory(progress func(string)) catalog.Inventory {
+	inv := newInventory()
+	stage(progress, "Reading installed packages")
+	_, out := probe([]string{"dpkg-query", "-W", "-f", "${Package} ${Version}\n"}, nil, time.Minute)
 	for _, l := range strings.Split(out, "\n") {
 		if f := strings.SplitN(l, " ", 2); len(f) == 2 {
-			inst[f[0]] = f[1]
+			inv.Installed[f[0]] = f[1]
 		}
 	}
-	_, out = run([]string{"apt", "list", "--upgradable"}, nil, time.Minute)
-	up := map[string]string{}
+	stage(progress, "Checking for updates")
+	_, out = probe([]string{"apt", "list", "--upgradable"}, nil, time.Minute)
 	for _, l := range strings.Split(out, "\n") {
 		if f := strings.Fields(l); len(f) > 1 && strings.Contains(f[0], "/") {
-			up[strings.Split(f[0], "/")[0]] = f[1]
+			inv.Upgradable[strings.Split(f[0], "/")[0]] = f[1]
 		}
 	}
-	return catalog.Inventory{Installed: inst, Upgradable: up}
+	stage(progress, "Reading held packages")
+	_, out = probe([]string{"apt-mark", "showhold"}, nil, time.Minute)
+	for _, l := range strings.Fields(out) {
+		inv.Pinned[l] = inv.Installed[l]
+	}
+	return inv
 }
 
 // ---- brew -----------------------------------------------------------------
 
 type brew struct{}
 
-func (brew) Available() bool               { return have("brew") }
-func (brew) Name() string                  { return "brew" }
-func (brew) Env() []string                 { return nil }
-func (brew) Install(p string) [][]string   { return [][]string{{"brew", "install", p}} }
-func (brew) Uninstall(p string) [][]string { return [][]string{{"brew", "uninstall", p}} }
-func (brew) OK(c int) bool                 { return c == 0 }
-func (brew) Upgrade(p string) [][]string {
+func (brew) Available() bool                { return have("brew") }
+func (brew) Name() string                   { return "brew" }
+func (brew) Env() []string                  { return nil }
+func (brew) SupportsVersions() bool         { return false } // Homebrew has no "install exactly this version"
+func (brew) Install(p, _ string) [][]string { return [][]string{{"brew", "install", p}} }
+func (brew) Uninstall(p string) [][]string  { return [][]string{{"brew", "uninstall", p}} }
+func (brew) Pin(p string) [][]string        { return [][]string{{"brew", "pin", p}} }
+func (brew) Unpin(p string) [][]string      { return [][]string{{"brew", "unpin", p}} }
+func (brew) OK(c int) bool                  { return c == 0 }
+func (brew) Upgrade(p, _ string) [][]string {
 	if p != "" {
 		return [][]string{{"brew", "upgrade", p}}
 	}
@@ -254,34 +336,49 @@ func (brew) Upgrade(p string) [][]string {
 
 var brewOutdated = regexp.MustCompile(`^(\S+) .*< (\S+)`)
 
-func (brew) Inventory() catalog.Inventory {
-	inst := map[string]string{}
+func (brew) Inventory(progress func(string)) catalog.Inventory {
+	inv := newInventory()
+	stage(progress, "Reading installed packages")
 	for _, extra := range [][]string{{}, {"--cask"}} {
-		_, out := run(cat([]string{"brew", "list", "--versions"}, extra), nil, time.Minute)
+		_, out := probe(cat([]string{"brew", "list", "--versions"}, extra), nil, time.Minute)
 		for _, l := range strings.Split(out, "\n") {
 			if f := strings.Fields(l); len(f) >= 2 {
-				inst[f[0]] = f[len(f)-1]
+				inv.Installed[f[0]] = f[len(f)-1]
 			}
 		}
 	}
-	_, out := run([]string{"brew", "outdated", "--verbose"}, nil, time.Minute)
-	up := map[string]string{}
+	stage(progress, "Checking for updates")
+	_, out := probe([]string{"brew", "outdated", "--verbose"}, nil, time.Minute)
 	for _, l := range strings.Split(out, "\n") {
 		if m := brewOutdated.FindStringSubmatch(l); m != nil {
-			up[m[1]] = m[2]
+			inv.Upgradable[m[1]] = m[2]
 		}
 	}
-	return catalog.Inventory{Installed: inst, Upgradable: up}
+	stage(progress, "Reading held packages")
+	_, out = probe([]string{"brew", "list", "--pinned"}, nil, time.Minute)
+	for _, l := range strings.Fields(out) {
+		inv.Pinned[l] = inv.Installed[l]
+	}
+	return inv
 }
 
 // ---- dry run (tests/demos) -----------------------------------------------
 
 type dryBackend struct{}
 
-func (dryBackend) Name() string                  { return "winget" }
-func (dryBackend) Env() []string                 { return nil }
-func (dryBackend) OK(c int) bool                 { return c == 0 }
-func (dryBackend) Install(p string) [][]string   { return [][]string{{"echo", "install", p}} }
+func (dryBackend) Name() string           { return "winget" }
+func (dryBackend) Env() []string          { return nil }
+func (dryBackend) OK(c int) bool          { return c == 0 }
+func (dryBackend) SupportsVersions() bool { return true }
+func (dryBackend) Install(p, v string) [][]string {
+	return [][]string{{"echo", "install", p, v}}
+}
 func (dryBackend) Uninstall(p string) [][]string { return [][]string{{"echo", "uninstall", p}} }
-func (dryBackend) Upgrade(p string) [][]string   { return [][]string{{"echo", "upgrade", p}} }
-func (dryBackend) Inventory() catalog.Inventory  { return catalog.Inventory{} }
+func (dryBackend) Upgrade(p, v string) [][]string {
+	return [][]string{{"echo", "upgrade", p, v}}
+}
+func (dryBackend) Pin(p string) [][]string   { return [][]string{{"echo", "pin", p}} }
+func (dryBackend) Unpin(p string) [][]string { return [][]string{{"echo", "unpin", p}} }
+func (dryBackend) Inventory(func(string)) catalog.Inventory {
+	return newInventory()
+}

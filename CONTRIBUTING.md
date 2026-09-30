@@ -18,4 +18,5 @@ Rules (enforced by `go test ./catalog` and reviewers):
 - `go vet ./... && go test ./... && python tests/test_e2e.py && python tests/test_go_agent.py` must pass.
 - Matching rules exist twice (Go: `catalog/catalog.go`, Python: `server/server.py`); change both and their tests.
 - Keep dependencies at zero (Go standard library, Python standard library). Fewer moving parts is a feature.
+- The UI is one file, `web/index.html`, with no build step and no network dependencies. UI icons (Lucide, ISC) are embedded by `tools/fetch_ui_icons.py`; app icons (Simple Icons, CC0) by `tools/fetch_icons.py`. Text must go through the `h()` helper (never `innerHTML`) so user-provided names can't inject markup.
 - Anything that executes commands must go through `run()`/backends with argv lists, never a shell string.

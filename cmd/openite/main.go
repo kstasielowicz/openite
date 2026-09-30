@@ -14,12 +14,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/openite/openite/catalog"
 )
 
-var version = "0.3.0" // overridden at release time: -ldflags "-X main.version=..."
+// pollInterval is the server-provided seconds between polls (0 = use the --interval flag).
+var pollInterval atomic.Int64
+
+var version = "0.5.0" // overridden at release time: -ldflags "-X main.version=..."
 
 type Config struct {
 	Server   string `json:"server"`
@@ -28,14 +32,15 @@ type Config struct {
 }
 
 type Step struct {
-	Type   string `json:"type"`
-	App    string `json:"app"`
-	Pkg    string `json:"pkg"`
-	All    bool   `json:"all"`
-	Name   string `json:"name"`
-	Shell  string `json:"shell"`
-	Body   string `json:"body"`
-	Reason string `json:"reason"`
+	Type    string `json:"type"`
+	App     string `json:"app"`
+	Pkg     string `json:"pkg"`
+	All     bool   `json:"all"`
+	Name    string `json:"name"`
+	Shell   string `json:"shell"`
+	Body    string `json:"body"`
+	Reason  string `json:"reason"`
+	Version string `json:"version"` // install/upgrade this exact version (empty = latest)
 	// Aliases are the display names the app has in "installed programs"; used for headless uninstall.
 	Aliases []string `json:"aliases"`
 }
@@ -100,10 +105,11 @@ func api(cfg Config, method, path string, in any, out any, auth bool) error {
 func osName() string { return runtime.GOOS + "/" + runtime.GOARCH }
 
 func checkin(cfg Config, b Backend) {
-	inv := b.Inventory()
+	inv := b.Inventory(nil)
 	err := api(cfg, "POST", "/api/agent/checkin", map[string]any{
 		"installed": inv.Installed, "upgradable": inv.Upgradable,
 		"installed_names": inv.Names, "upgradable_names": inv.UpgradableNames,
+		"pinned": inv.Pinned, "pinned_names": inv.PinnedNames, "sysinfo": currentSysInfo(),
 		"manager": b.Name(), "os": osName(), "agent_version": version,
 	}, nil, true)
 	if err != nil {
@@ -153,7 +159,11 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 	failed := false
 	for n, s := range job.Steps {
 		label := map[string]string{"install": "install " + s.App, "uninstall": "uninstall " + s.App,
-			"upgrade": "upgrade " + s.App, "script": "script " + s.Name, "skip": "skip " + s.App}[s.Type]
+			"upgrade": "upgrade " + s.App, "script": "script " + s.Name, "skip": "skip " + s.App,
+			"pin": "hold " + s.App, "unpin": "release hold on " + s.App}[s.Type]
+		if s.Version != "" && (s.Type == "install" || s.Type == "upgrade") {
+			label += " (version " + s.Version + ")"
+		}
 		if s.Type == "upgrade" && s.All {
 			label = "upgrade all"
 		}
@@ -180,12 +190,20 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 				good = b.OK(code)
 			case pkg != "" && !catalog.SafeID.MatchString(pkg): // never hand odd-looking ids (e.g. "--flag") to a package manager
 				good, out = false, fmt.Sprintf("refusing unsafe package id %q", pkg)
+			case s.Version != "" && !catalog.SafeVersion.MatchString(s.Version):
+				good, out = false, fmt.Sprintf("refusing unsafe version %q", s.Version)
+			case s.Version != "" && !b.SupportsVersions():
+				good, out = false, b.Name()+" cannot install a specific version"
 			case s.Type == "install":
-				cmds = b.Install(pkg)
+				cmds = b.Install(pkg, s.Version)
 			case s.Type == "uninstall":
 				cmds = b.Uninstall(pkg)
 			case s.Type == "upgrade":
-				cmds = b.Upgrade(pkg)
+				cmds = b.Upgrade(pkg, s.Version)
+			case s.Type == "pin" && pkg != "":
+				cmds = b.Pin(pkg)
+			case s.Type == "unpin" && pkg != "":
+				cmds = b.Unpin(pkg)
 			default:
 				good, out = false, "unknown step type "+s.Type
 			}
@@ -214,9 +232,15 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 }
 
 func processOnce(cfg Config, b Backend) (bool, error) {
-	var res struct{ Job *Job }
+	var res struct {
+		Job      *Job
+		Interval int
+	}
 	if err := api(cfg, "GET", "/api/agent/poll", nil, &res, true); err != nil {
 		return false, err
+	}
+	if res.Interval >= 5 && res.Interval <= 300 {
+		pollInterval.Store(int64(res.Interval)) // the server decides how often devices check in
 	}
 	if res.Job == nil {
 		return false, nil
@@ -320,6 +344,9 @@ func cmdRun(args []string, loop bool) {
 		}
 		// Jitter so thousands of agents don't hit the server in lockstep; back off while the server is unreachable.
 		d := time.Duration(*interval) * time.Second
+		if v := pollInterval.Load(); v >= 5 {
+			d = time.Duration(v) * time.Second
+		}
 		for i := 0; i < failures && d < 5*time.Minute; i++ {
 			d *= 2
 		}
@@ -359,6 +386,8 @@ func main() {
 		cmdStatus(rest)
 	case "drivers":
 		cmdDrivers(rest)
+	case "versions":
+		cmdVersions(rest)
 	case "schedule":
 		cmdSchedule(rest)
 	case "install":
@@ -367,6 +396,10 @@ func main() {
 		cmdChange("upgrade", rest)
 	case "uninstall":
 		cmdChange("uninstall", rest)
+	case "hold", "pin":
+		cmdChange("pin", rest)
+	case "unhold", "unpin":
+		cmdChange("unpin", rest)
 	case "version", "--version", "-v":
 		fmt.Println("openite", version)
 	case "help", "--help", "-h":

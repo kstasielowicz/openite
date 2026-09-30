@@ -25,6 +25,8 @@ ROOT = HERE.parent  # catalog/ and web/ live at the repo root, shared with the G
 BUILTIN_CATALOG = json.loads((ROOT / "catalog" / "catalog.json").read_text("utf-8"))
 PACKS = json.loads((ROOT / "catalog" / "packs.json").read_text("utf-8"))
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+@/-]{0,127}$")
+SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+~:-]{0,63}$")
+VERSION = "0.5.0"
 MANAGERS = ("winget", "brew", "apt")
 SESSION_TTL = 30 * 86400
 ENROLL_TTL = 15 * 60
@@ -48,11 +50,15 @@ CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY, account_id INTEGER NOT N
 CREATE TABLE IF NOT EXISTS assignments(id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, tag TEXT, profile_id INTEGER, auto_update INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS schedules(id INTEGER PRIMARY KEY, account_id INTEGER NOT NULL, tag TEXT, hour INTEGER, minute INTEGER,
   days TEXT DEFAULT '[]', rollout INTEGER DEFAULT 1, last_run TEXT);
+CREATE TABLE IF NOT EXISTS server_settings(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, account_id INTEGER, ts REAL, actor TEXT, action TEXT, detail TEXT);
 """
 # columns added after the first release: (table, column, definition)
 MIGRATIONS = [
     ("devices", "tags", "TEXT DEFAULT '[]'"),
+    ("devices", "sysinfo", "TEXT DEFAULT '{}'"),
+    ("devices", "notes", "TEXT DEFAULT ''"),
+    ("devices", "settings", "TEXT DEFAULT '{}'"),
     ("enroll_codes", "reusable", "INTEGER DEFAULT 0"),
     ("enroll_codes", "tags", "TEXT DEFAULT '[]'"),
     ("jobs", "source", "TEXT DEFAULT 'manual'"),
@@ -117,6 +123,73 @@ def is_online(dev):
 
 
 # ---------------------------------------------------------------- catalog & desired state
+def get_setting(db, key, default=None):
+    r = db.execute("SELECT value FROM server_settings WHERE key=?", (key,)).fetchone()
+    return json.loads(r["value"]) if r else default
+
+
+def set_setting(db, key, value):
+    db.execute("INSERT OR REPLACE INTO server_settings VALUES(?,?)", (key, json.dumps(value)))
+
+
+def registration_open(db):
+    if not db.execute("SELECT 1 FROM accounts LIMIT 1").fetchone():
+        return True  # the very first account can always be created
+    v = get_setting(db, "registration")
+    return STATE["allow_registration"] if v is None else bool(v)
+
+
+def poll_interval(db):
+    return int(get_setting(db, "poll_interval", 15))
+
+
+def is_admin(db, account):
+    r = db.execute("SELECT MIN(id) AS m FROM accounts").fetchone()
+    return r["m"] == account  # the first account administers the server
+
+
+def _hhmm(text):
+    m = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", str(text or ""))
+    return int(m.group(1)) * 60 + int(m.group(2)) if m else None
+
+
+def in_window(settings, now=None):
+    """True when the device's maintenance window (if any) is open. Windows may cross midnight."""
+    w = (settings or {}).get("maintenance")
+    s_, e_ = (_hhmm(w.get("start")), _hhmm(w.get("end"))) if isinstance(w, dict) else (None, None)
+    if s_ is None or e_ is None:
+        return True
+    now = now or datetime.datetime.now()
+    t = now.hour * 60 + now.minute
+    return s_ <= t < e_ if s_ <= e_ else (t >= s_ or t < e_)
+
+
+def norm_apps(apps):
+    """Profile apps may be plain keys (old format) or {key, version}. Always returns [{key, version}]."""
+    out = []
+    for a in apps or []:
+        if isinstance(a, str):
+            out.append({"key": a, "version": ""})
+        elif isinstance(a, dict) and a.get("key"):
+            v = str(a.get("version") or "")
+            if v and not SAFE_VERSION.match(v):
+                raise ApiError(400, f"invalid version '{v}'")
+            out.append({"key": str(a["key"]), "version": v})
+        else:
+            raise ApiError(400, "apps must be app keys or {key, version}")
+    return out
+
+
+def cmp_versions(a, b):
+    """Numeric dotted-version compare: -1, 0, 1 ("2.9" < "2.10")."""
+    x, y = [int(n) for n in re.findall(r"\d+", str(a))], [int(n) for n in re.findall(r"\d+", str(b))]
+    for i in range(max(len(x), len(y))):
+        p, q = (x[i] if i < len(x) else 0), (y[i] if i < len(y) else 0)
+        if p != q:
+            return -1 if p < q else 1
+    return 0
+
+
 def full_catalog(c, account_id):
     apps = {a["key"]: dict(a, custom=False) for a in BUILTIN_CATALOG}
     for r in c.execute("SELECT data FROM custom_apps WHERE account_id=?", (account_id,)):
@@ -128,7 +201,7 @@ def full_catalog(c, account_id):
 def load_assignments(db, account):
     rows = db.execute("SELECT a.tag,a.auto_update,p.apps FROM assignments a JOIN profiles p ON p.id=a.profile_id "
                       "WHERE a.account_id=?", (account,)).fetchall()
-    return [(r["tag"], bool(r["auto_update"]), json.loads(r["apps"])) for r in rows]
+    return [(r["tag"], bool(r["auto_update"]), norm_apps(json.loads(r["apps"]))) for r in rows]
 
 
 def dev_tags(dev):
@@ -136,12 +209,14 @@ def dev_tags(dev):
 
 
 def desired_keys(assigns, dev):
-    """{app_key: auto_update} this device should have, from profiles assigned to its tags."""
+    """{app_key: {auto, version}} this device should have, from profiles assigned to its tags."""
     out, tags = {}, dev_tags(dev)
     for tag, au, apps in assigns:
         if tag in tags:
-            for k in apps:
-                out[k] = out.get(k, False) or au
+            for e in apps:
+                cur = out.setdefault(e["key"], {"auto": False, "version": ""})
+                cur["auto"] = cur["auto"] or au
+                cur["version"] = cur["version"] or e["version"]
     return out
 
 
@@ -163,21 +238,40 @@ def name_matches(have, alias):
     return not rest or rest[0].isdigit() or rest[0] in "(.-" or (rest[0] == "v" and len(rest) > 1 and rest[1].isdigit())
 
 
-def app_state(app, manager, inv):
-    """(installed, upgradable) for one catalog app. winget lists apps installed outside winget (Vivaldi, ...)
-    under ARP ids with no package id, so besides the id we also match by display name."""
+def app_status(app, manager, inv):
+    """Installed / upgradable / held flags plus versions for one catalog app. winget lists apps installed outside winget
+    (Vivaldi, ...) under ARP ids with no package id, so besides the id we also match by display name."""
     aliases = [app["name"]] + list(app.get("match", []))
-    installed = upgradable = False
+    st = {"installed": False, "upgradable": False, "held": False, "version": "", "available": ""}
     pkg = app.get(manager)
     if pkg:
         low = pkg.lower()
-        installed = any(k.lower() == low for k in inv.get("installed", {}))
-        upgradable = any(k.lower() == low for k in inv.get("upgradable", {}))
-    if not installed:
-        installed = any(name_matches(n, al) for n in inv.get("installed_names", {}) for al in aliases)
-    if not upgradable:
-        upgradable = any(name_matches(n, al) for n in inv.get("upgradable_names", {}) for al in aliases)
-    return installed or upgradable, upgradable
+        for k, v in inv.get("installed", {}).items():
+            if k.lower() == low:
+                st["installed"], st["version"] = True, str(v)
+        for k, v in inv.get("upgradable", {}).items():
+            if k.lower() == low:
+                st["upgradable"], st["available"] = True, str(v)
+        st["held"] = any(k.lower() == low for k in inv.get("pinned", {}))
+    if not st["installed"]:
+        for n, v in inv.get("installed_names", {}).items():
+            if any(name_matches(n, al) for al in aliases):
+                st["installed"], st["version"] = True, str(v)
+                break
+    if not st["upgradable"]:
+        for n, v in inv.get("upgradable_names", {}).items():
+            if any(name_matches(n, al) for al in aliases):
+                st["upgradable"], st["available"] = True, str(v)
+                break
+    if not st["held"]:
+        st["held"] = any(name_matches(n, al) for n in inv.get("pinned_names", {}) for al in aliases)
+    st["installed"] = st["installed"] or st["upgradable"]
+    return st
+
+
+def app_state(app, manager, inv):
+    st = app_status(app, manager, inv)
+    return st["installed"], st["upgradable"]
 
 
 def maybe_reconcile(db, account, dev):
@@ -188,16 +282,23 @@ def maybe_reconcile(db, account, dev):
     catalog = full_catalog(db, account)
     inv = json.loads(dev["inventory"] or "{}")
     steps = []
-    for k, auto in sorted(want.items()):
+    for k, cfg in sorted(want.items()):
         app = catalog.get(k)
         pkg = app and app.get(dev["manager"])
         if not pkg:
             continue
-        have, outdated = app_state(app, dev["manager"], inv)
-        if not have:
-            steps.append({"type": "install", "app": app["name"], "pkg": pkg})
-        elif auto and outdated:
-            steps.append({"type": "upgrade", "app": app["name"], "pkg": pkg})
+        st = app_status(app, dev["manager"], inv)
+        ver = cfg["version"]
+        step = {"type": "install", "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))}
+        if ver:
+            step["version"] = ver
+        if not st["installed"]:
+            steps.append(step)
+        elif ver:
+            if st["version"] and cmp_versions(st["version"], ver) < 0:  # older than pinned: move up (never auto-downgrade)
+                steps.append(dict(step, type="upgrade"))
+        elif cfg["auto"] and st["upgradable"] and not st["held"]:
+            steps.append(dict(step, type="upgrade"))
     if not steps:
         return
     if db.execute("SELECT 1 FROM jobs WHERE device_id=? AND source='reconcile' AND status IN ('queued','running')",
@@ -215,19 +316,26 @@ def resolve_step(step, device, catalog, scripts, profiles):
     """Turn a UI-level step into concrete steps for one device."""
     kind, mgr = step.get("type"), device["manager"]
     out = []
-    if kind in ("install", "uninstall", "upgrade"):
+    if kind in ("install", "uninstall", "upgrade", "pin", "unpin"):
         keys = step.get("apps")
         if kind == "upgrade" and keys == "all":
             return [{"type": "upgrade", "all": True}]
         if not isinstance(keys, list) or not keys:
             raise ApiError(400, f"{kind}: 'apps' must be a non-empty list")
+        versions = step.get("versions") or {}
         for k in keys:
             app = catalog.get(k)
             if not app:
                 raise ApiError(400, f"unknown app: {k}")
+            ver = str(versions.get(k) or "") if kind in ("install", "upgrade") else ""
+            if ver and not SAFE_VERSION.match(ver):
+                raise ApiError(400, f"invalid version for {app['name']}")
             pkg = app.get(mgr)
             if pkg:
-                out.append({"type": kind, "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))})
+                entry = {"type": kind, "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))}
+                if ver:
+                    entry["version"] = ver
+                out.append(entry)
             else:
                 out.append({"type": "skip", "app": app["name"], "reason": f"no {mgr or 'package manager'} package id"})
     elif kind == "script":
@@ -239,9 +347,10 @@ def resolve_step(step, device, catalog, scripts, profiles):
         p = profiles.get(step.get("profile_id"))
         if not p:
             raise ApiError(400, "unknown profile")
-        apps = json.loads(p["apps"])
-        if apps:
-            out += resolve_step({"type": "install", "apps": apps}, device, catalog, scripts, profiles)
+        entries = norm_apps(json.loads(p["apps"]))
+        if entries:
+            out += resolve_step({"type": "install", "apps": [e["key"] for e in entries],
+                                 "versions": {e["key"]: e["version"] for e in entries if e["version"]}}, device, catalog, scripts, profiles)
         for sid in json.loads(p["script_ids"]):
             if sid in scripts:
                 out += resolve_step({"type": "script", "script_id": sid}, device, catalog, scripts, profiles)
@@ -266,7 +375,7 @@ def new_session(db, account_id):
 
 
 def h_register(ctx, body):
-    if not STATE["allow_registration"]:
+    if not registration_open(ctx.db):
         raise ApiError(403, "registration is disabled on this server")
     email, pw = need(body, "email", "password")
     email = email.strip().lower()
@@ -294,7 +403,7 @@ def h_login(ctx, body):
 
 
 def h_info(ctx, body):
-    return {"home": False, "lite": False, "registration": STATE["allow_registration"], "version": "0.3.0"}
+    return {"home": False, "lite": False, "registration": registration_open(ctx.db), "version": VERSION}
 
 
 # ---------------------------------------------------------------- catalog / apps
@@ -304,6 +413,11 @@ def h_catalog(ctx, body):
 
 def h_packs(ctx, body):
     return PACKS
+
+
+def h_icons(ctx, body):
+    d = ROOT / "web" / "icons"
+    return sorted(p.stem for p in d.glob("*.svg")) if d.is_dir() else []
 
 
 def h_add_app(ctx, body):
@@ -335,19 +449,37 @@ def h_del_app(ctx, body, key):
 # ---------------------------------------------------------------- devices
 def device_view(r, assigns, catalog):
     inv = json.loads(r["inventory"] or "{}")
-    have, outdated = [], []
+    mgr = r["manager"]
+    have, outdated, held, versions, available, status = [], [], [], {}, {}, {}
     for key, app in catalog.items():
-        i, u = app_state(app, r["manager"], inv)
-        if i:
+        st = app_status(app, mgr, inv)
+        status[key] = st
+        if st["installed"]:
             have.append(key)
-        if u:
+            if st["version"]:
+                versions[key] = st["version"]
+        if st["upgradable"]:
             outdated.append(key)
+            available[key] = st["available"]
+        if st["held"]:
+            held.append(key)
     want = desired_keys(assigns, r)
-    missing = [catalog[k]["name"] for k in sorted(want) if k in catalog and catalog[k].get(r["manager"]) and k not in have]
-    return {"id": r["id"], "name": r["name"], "os": r["os"], "manager": r["manager"], "tags": json.loads(r["tags"] or "[]"),
+    missing = []
+    for k in sorted(want):
+        app = catalog.get(k)
+        if not app or not app.get(mgr):
+            continue
+        st, ver = status[k], want[k]["version"]
+        if not st["installed"]:
+            missing.append(app["name"] + (f" {ver}" if ver else ""))
+        elif ver and st["version"] and cmp_versions(st["version"], ver) != 0:
+            missing.append(f"{app['name']} {ver} (has {st['version']})")
+    return {"id": r["id"], "name": r["name"], "os": r["os"], "manager": mgr, "tags": json.loads(r["tags"] or "[]"),
             "last_seen": r["last_seen"], "online": is_online(r), "agent_version": r["agent_version"],
-            "have": have, "outdated": outdated, "n_installed": len(inv.get("installed", {})),
-            "n_upgradable": len(inv.get("upgradable", {})), "managed": bool(want), "missing": missing}
+            "have": have, "outdated": outdated, "held": held, "versions": versions, "available": available,
+            "n_installed": len(inv.get("installed", {})), "n_upgradable": len(inv.get("upgradable", {})),
+            "managed": bool(want), "missing": missing, "sysinfo": json.loads(r["sysinfo"] or "{}"),
+            "notes": r["notes"] or "", "settings": json.loads(r["settings"] or "{}")}
 
 
 def h_devices(ctx, body):
@@ -357,8 +489,22 @@ def h_devices(ctx, body):
 
 
 def h_update_device(ctx, body, did):
+    if not ctx.db.execute("SELECT 1 FROM devices WHERE id=? AND account_id=?", (did, ctx.account)).fetchone():
+        raise ApiError(404, "device not found")
     if "name" in body and body["name"]:
-        ctx.db.execute("UPDATE devices SET name=? WHERE id=? AND account_id=?", (body["name"], did, ctx.account))
+        ctx.db.execute("UPDATE devices SET name=? WHERE id=? AND account_id=?", (str(body["name"])[:80], did, ctx.account))
+    if "notes" in body:
+        ctx.db.execute("UPDATE devices SET notes=? WHERE id=? AND account_id=?", (str(body["notes"] or "")[:1000], did, ctx.account))
+    if "settings" in body:
+        raw = body["settings"] if isinstance(body["settings"], dict) else {}
+        settings = {}
+        w = raw.get("maintenance")
+        if w:
+            if not isinstance(w, dict) or _hhmm(w.get("start")) is None or _hhmm(w.get("end")) is None:
+                raise ApiError(400, "maintenance window needs start and end like 22:00")
+            settings["maintenance"] = {"start": w["start"], "end": w["end"]}
+        ctx.db.execute("UPDATE devices SET settings=? WHERE id=? AND account_id=?", (json.dumps(settings), did, ctx.account))
+        audit(ctx.db, ctx.account, ctx.actor, "device.settings", f"{did}: {settings or 'cleared'}")
     if "tags" in body:
         ctx.db.execute("UPDATE devices SET tags=? WHERE id=? AND account_id=?",
                        (json.dumps(clean_tags(body["tags"])), did, ctx.account))
@@ -411,13 +557,13 @@ def h_del_script(ctx, body, sid):
 
 
 def h_list_profiles(ctx, body):
-    return [{"id": r["id"], "name": r["name"], "apps": json.loads(r["apps"]), "script_ids": json.loads(r["script_ids"])}
+    return [{"id": r["id"], "name": r["name"], "apps": norm_apps(json.loads(r["apps"])), "script_ids": json.loads(r["script_ids"])}
             for r in ctx.db.execute("SELECT * FROM profiles WHERE account_id=? ORDER BY name", (ctx.account,))]
 
 
 def h_add_profile(ctx, body):
     (name,) = need(body, "name")
-    apps, sids = body.get("apps") or [], body.get("script_ids") or []
+    apps, sids = norm_apps(body.get("apps")), body.get("script_ids") or []
     cur = ctx.db.execute("INSERT INTO profiles(account_id,name,apps,script_ids) VALUES(?,?,?,?)",
                          (ctx.account, name, json.dumps(apps), json.dumps(sids)))
     audit(ctx.db, ctx.account, ctx.actor, "profile.add", name)
@@ -429,7 +575,7 @@ def h_update_profile(ctx, body, pid):
     if not row:
         raise ApiError(404, "profile not found")
     ctx.db.execute("UPDATE profiles SET name=?, apps=?, script_ids=? WHERE id=?",
-                   (body.get("name") or row["name"], json.dumps(body.get("apps", json.loads(row["apps"]))),
+                   (body.get("name") or row["name"], json.dumps(norm_apps(body["apps"]) if "apps" in body else json.loads(row["apps"])),
                     json.dumps(body.get("script_ids", json.loads(row["script_ids"]))), pid))
     audit(ctx.db, ctx.account, ctx.actor, "profile.update", str(pid))
     return {}
@@ -480,7 +626,7 @@ def h_create_jobs(ctx, body):
     return create_jobs(ctx.db, ctx.account, ctx.actor, body)
 
 
-def create_jobs(db, account, actor, body):
+def create_jobs(db, account, actor, body, source="manual"):
     (steps,) = need(body, "steps")
     devs = {}
     for r in db.execute("SELECT * FROM devices WHERE account_id=?", (account,)):
@@ -509,8 +655,8 @@ def create_jobs(db, account, actor, body):
         for s in steps:
             resolved += resolve_step(s, dev, catalog, scripts, profiles)
         cur = db.execute(
-            "INSERT INTO jobs(account_id,device_id,title,steps,status,created,rollout_id,batch,rollout_max_fail) VALUES(?,?,?,?,?,?,?,?,?)",
-            (account, dev["id"], title, json.dumps(resolved), "queued", time.time(), rid, batch_of[i] if rollout else 0, max_fail))
+            "INSERT INTO jobs(account_id,device_id,title,steps,status,created,rollout_id,batch,rollout_max_fail,source) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (account, dev["id"], title, json.dumps(resolved), "queued", time.time(), rid, batch_of[i] if rollout else 0, max_fail, source))
         ids.append(cur.lastrowid)
     audit(db, account, actor, "job.create",
           f"{title} on {len(order)} device(s)" + (f", staged rollout {plan_batches(len(order))}" if rollout else ""))
@@ -598,7 +744,7 @@ def run_due_schedules(now=None):
             db.execute("UPDATE schedules SET last_run=? WHERE id=?", (today, sc["id"]))
             try:
                 create_jobs(db, sc["account_id"], "system", {"tags": [sc["tag"]], "steps": [{"type": "upgrade", "apps": "all"}],
-                                                             "title": "Scheduled update", "rollout": bool(sc["rollout"])})
+                                                             "title": "Scheduled update", "rollout": bool(sc["rollout"])}, source="schedule")
                 started += 1
             except ApiError:
                 pass  # no devices with that tag right now
@@ -608,13 +754,92 @@ def run_due_schedules(now=None):
     return started
 
 
+def prune_old(db):
+    """Keep the database small: drop finished jobs older than the retention setting, audit entries older than a year."""
+    days = int(get_setting(db, "retention_days", 90))
+    db.execute("DELETE FROM jobs WHERE finished IS NOT NULL AND finished<? AND status IN ('done','failed','cancelled','halted')",
+               (time.time() - days * 86400,))
+    db.execute("DELETE FROM audit WHERE ts<?", (time.time() - 365 * 86400,))
+
+
 def scheduler_loop():
+    last_prune = 0
     while True:
         try:
             run_due_schedules()
+            if time.time() - last_prune > 3600:
+                db = connect()
+                try:
+                    prune_old(db)
+                    db.commit()
+                finally:
+                    db.close()
+                last_prune = time.time()
         except Exception as e:  # noqa: BLE001
             print("scheduler:", e)
         time.sleep(30)
+
+
+# ---------------------------------------------------------------- settings & overview
+def h_get_settings(ctx, body):
+    return {"registration": registration_open(ctx.db), "poll_interval": poll_interval(ctx.db),
+            "retention_days": int(get_setting(ctx.db, "retention_days", 90)), "is_admin": is_admin(ctx.db, ctx.account),
+            "server_time": datetime.datetime.now().isoformat(timespec="seconds"), "timezone": time.tzname[0],
+            "version": VERSION, "accounts": ctx.db.execute("SELECT COUNT(*) AS n FROM accounts").fetchone()["n"]}
+
+
+def h_put_settings(ctx, body):
+    if not is_admin(ctx.db, ctx.account):
+        raise ApiError(403, "only the first account (the administrator) can change server settings")
+    if "registration" in body:
+        set_setting(ctx.db, "registration", bool(body["registration"]))
+    if "poll_interval" in body:
+        v = int(body["poll_interval"])
+        if not 5 <= v <= 300:
+            raise ApiError(400, "poll_interval must be 5-300 seconds")
+        set_setting(ctx.db, "poll_interval", v)
+    if "retention_days" in body:
+        v = int(body["retention_days"])
+        if not 7 <= v <= 3650:
+            raise ApiError(400, "retention_days must be 7-3650")
+        set_setting(ctx.db, "retention_days", v)
+    audit(ctx.db, ctx.account, ctx.actor, "settings.update", json.dumps({k: body[k] for k in body if k in ("registration", "poll_interval", "retention_days")}))
+    return {}
+
+
+def h_overview(ctx, body):
+    """One-screen fleet summary: health, what needs attention, where updates are pending."""
+    assigns, catalog = load_assignments(ctx.db, ctx.account), full_catalog(ctx.db, ctx.account)
+    rows = ctx.db.execute("SELECT * FROM devices WHERE account_id=?", (ctx.account,)).fetchall()
+    views = [device_view(r, assigns, catalog) for r in rows]
+    now = time.time()
+    by_os, pending, attention = {}, {}, []
+    ram_mb = 0
+    for v in views:
+        si = v["sysinfo"] or {}
+        label = (si.get("os") or v["os"] or "unknown").split(" ")[0:3]
+        by_os[" ".join(label)] = by_os.get(" ".join(label), 0) + 1
+        ram_mb += si.get("mem_total_mb") or 0
+        for k in v["outdated"]:
+            pending[k] = pending.get(k, 0) + 1
+        if not v["online"] and v["last_seen"] and now - v["last_seen"] > 86400:
+            attention.append({"id": v["id"], "name": v["name"], "reason": "offline for over a day"})
+        free, total = si.get("disk_free_gb") or 0, si.get("disk_total_gb") or 0
+        if total and (free < 5 or (free < total * 0.1 and free < 50)):  # small in absolute terms, not just a percentage of a huge disk
+            attention.append({"id": v["id"], "name": v["name"], "reason": f"low disk space ({si['disk_free_gb']} GB free)"})
+        if v["managed"] and v["missing"]:
+            attention.append({"id": v["id"], "name": v["name"], "reason": "out of sync: " + ", ".join(v["missing"][:3])})
+    jobs = {}
+    for r in ctx.db.execute("SELECT status, COUNT(*) AS n FROM jobs WHERE account_id=? AND created>? GROUP BY status", (ctx.account, now - 86400)):
+        jobs[r["status"]] = r["n"]
+    failed = [{"id": r["id"], "device_id": r["device_id"], "title": r["title"], "finished": r["finished"]} for r in ctx.db.execute(
+        "SELECT id, device_id, title, finished FROM jobs WHERE account_id=? AND status='failed' ORDER BY id DESC LIMIT 5", (ctx.account,))]
+    top = sorted(pending.items(), key=lambda kv: -kv[1])[:8]
+    return {"devices": len(views), "online": sum(1 for v in views if v["online"]),
+            "with_updates": sum(1 for v in views if v["outdated"]), "managed": sum(1 for v in views if v["managed"]),
+            "by_os": sorted(({"name": k, "count": n} for k, n in by_os.items()), key=lambda x: -x["count"]),
+            "pending": [{"key": k, "name": catalog[k]["name"], "count": n} for k, n in top if k in catalog],
+            "attention": attention[:12], "jobs_24h": jobs, "recent_failed": failed, "ram_total_gb": round(ram_mb / 1024)}
 
 
 # ---------------------------------------------------------------- agent-facing
@@ -635,23 +860,31 @@ def h_agent_enroll(ctx, body):
 
 
 def h_agent_checkin(ctx, body):
-    inv = {k: body.get(k) or {} for k in ("installed", "upgradable", "installed_names", "upgradable_names")}
-    ctx.db.execute("UPDATE devices SET last_seen=?, inventory=?, os=COALESCE(?,os), manager=COALESCE(?,manager), agent_version=? WHERE id=?",
-                   (time.time(), json.dumps(inv), body.get("os"), body.get("manager"), body.get("agent_version"), ctx.device))
+    inv = {k: body.get(k) or {} for k in ("installed", "upgradable", "installed_names", "upgradable_names", "pinned", "pinned_names")}
+    sysinfo = body.get("sysinfo")
+    sysinfo = json.dumps(sysinfo) if isinstance(sysinfo, dict) and len(json.dumps(sysinfo)) < 20000 else None
+    ctx.db.execute("UPDATE devices SET last_seen=?, inventory=?, os=COALESCE(?,os), manager=COALESCE(?,manager), agent_version=?, "
+                   "sysinfo=COALESCE(?,sysinfo) WHERE id=?",
+                   (time.time(), json.dumps(inv), body.get("os"), body.get("manager"), body.get("agent_version"), sysinfo, ctx.device))
     maybe_reconcile(ctx.db, ctx.account, ctx.db.execute("SELECT * FROM devices WHERE id=?", (ctx.device,)).fetchone())
-    return {}
+    return {"interval": poll_interval(ctx.db)}
 
 
 def h_agent_poll(ctx, body):
     ctx.db.execute("UPDATE devices SET last_seen=? WHERE id=?", (time.time(), ctx.device))
+    settings = json.loads(ctx.db.execute("SELECT settings FROM devices WHERE id=?", (ctx.device,)).fetchone()["settings"] or "{}")
+    window_open = in_window(settings)
+    interval = poll_interval(ctx.db)
     for row in ctx.db.execute("SELECT * FROM jobs WHERE device_id=? AND status='queued' ORDER BY id", (ctx.device,)).fetchall():
+        if row["source"] in ("reconcile", "schedule") and not window_open:
+            continue  # automatic work waits for the device's maintenance window; jobs you start by hand run right away
         if row["rollout_id"] and ctx.db.execute(
                 "SELECT 1 FROM jobs WHERE rollout_id=? AND batch<? AND status IN ('queued','running') LIMIT 1",
                 (row["rollout_id"], row["batch"])).fetchone():
             continue  # earlier batch still in flight
         ctx.db.execute("UPDATE jobs SET status='running', started=? WHERE id=?", (time.time(), row["id"]))
-        return {"job": {"id": row["id"], "title": row["title"], "steps": json.loads(row["steps"])}}
-    return {"job": None}
+        return {"job": {"id": row["id"], "title": row["title"], "steps": json.loads(row["steps"])}, "interval": interval}
+    return {"job": None, "interval": interval}
 
 
 def h_agent_result(ctx, body, jid):
@@ -673,6 +906,7 @@ ROUTES = [
     ("POST", r"/api/login", h_login, "none"),
     ("GET", r"/api/catalog", h_catalog, "user"),
     ("GET", r"/api/packs", h_packs, "user"),
+    ("GET", r"/api/icons", h_icons, "user"),
     ("POST", r"/api/apps", h_add_app, "user"),
     ("DELETE", r"/api/apps/([^/]+)", h_del_app, "user"),
     ("GET", r"/api/devices", h_devices, "user"),
@@ -693,6 +927,9 @@ ROUTES = [
     ("POST", r"/api/schedules", h_add_schedule, "user"),
     ("DELETE", r"/api/schedules/(\d+)", h_del_schedule, "user"),
     ("GET", r"/api/audit", h_audit, "user"),
+    ("GET", r"/api/overview", h_overview, "user"),
+    ("GET", r"/api/settings", h_get_settings, "user"),
+    ("PUT", r"/api/settings", h_put_settings, "user"),
     ("POST", r"/api/jobs", h_create_jobs, "user"),
     ("GET", r"/api/jobs", h_jobs, "user"),
     ("POST", r"/api/jobs/(\d+)/cancel", h_cancel_job, "user"),

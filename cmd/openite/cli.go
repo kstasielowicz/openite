@@ -19,6 +19,8 @@ Everyday use
   openite install firefox vlc     install apps by name
   openite install --preset developer
   openite update [app ...]        update apps (no names = update everything)
+  openite install git@2.44.0      install an exact version (winget, apt)
+  openite hold git | unhold git   stop / resume updates for an app (update-all skips held apps)
   openite uninstall app ...       silent uninstall, no windows to click through
   openite list [category]         show the catalog
   openite search <text>
@@ -60,10 +62,12 @@ func categoryRank(c string) int {
 	return 1
 }
 
-// resolve turns user input ("firefox", "Visual Studio Code", "vsc", "preset:gaming") into catalog apps.
-func resolve(tokens []string, presets []string) ([]catalog.App, error) {
+// resolve turns user input ("firefox", "Visual Studio Code", "vsc", "git@2.44.0", "preset:gaming") into catalog
+// apps, plus any exact versions the user asked for.
+func resolve(tokens []string, presets []string) ([]catalog.App, map[string]string, error) {
 	all := catalog.Apps()
 	var out []catalog.App
+	versions := map[string]string{}
 	seen := map[string]bool{}
 	add := func(a catalog.App) {
 		if !seen[a.Key] {
@@ -75,6 +79,13 @@ func resolve(tokens []string, presets []string) ([]catalog.App, error) {
 		tokens = append(tokens, "preset:"+p)
 	}
 	for _, t := range tokens {
+		ver := ""
+		if i := strings.LastIndex(t, "@"); i > 0 {
+			ver, t = t[i+1:], t[:i]
+			if !catalog.SafeVersion.MatchString(ver) {
+				return nil, nil, fmt.Errorf("%q is not a valid version", ver)
+			}
+		}
 		low := strings.ToLower(strings.TrimSpace(t))
 		if strings.HasPrefix(low, "preset:") {
 			id := strings.TrimPrefix(low, "preset:")
@@ -90,7 +101,7 @@ func resolve(tokens []string, presets []string) ([]catalog.App, error) {
 				}
 			}
 			if !found {
-				return nil, fmt.Errorf("unknown preset %q (see: openite presets)", id)
+				return nil, nil, fmt.Errorf("unknown preset %q (see: openite presets)", id)
 			}
 			continue
 		}
@@ -103,22 +114,27 @@ func resolve(tokens []string, presets []string) ([]catalog.App, error) {
 				partial = append(partial, a)
 			}
 		}
+		var hit *catalog.App
 		switch {
 		case len(exact) == 1:
-			add(exact[0])
+			hit = &exact[0]
 		case len(exact) == 0 && len(partial) == 1:
-			add(partial[0])
+			hit = &partial[0]
 		case len(exact) == 0 && len(partial) == 0:
-			return nil, fmt.Errorf("no app matches %q (try: openite search %s)", t, t)
+			return nil, nil, fmt.Errorf("no app matches %q (try: openite search %s)", t, t)
 		default:
 			names := []string{}
 			for _, a := range append(exact, partial...) {
 				names = append(names, a.Key)
 			}
-			return nil, fmt.Errorf("%q is ambiguous: %s", t, strings.Join(names, ", "))
+			return nil, nil, fmt.Errorf("%q is ambiguous: %s", t, strings.Join(names, ", "))
+		}
+		add(*hit)
+		if ver != "" {
+			versions[hit.Key] = ver
 		}
 	}
-	return out, nil
+	return out, versions, nil
 }
 
 func cmdList(args []string) {
@@ -179,7 +195,7 @@ func needBackend() Backend {
 
 func inventoryWithSpinner(b Backend) catalog.Inventory {
 	var inv catalog.Inventory
-	withSpinner("Checking what's installed on this PC", func() bool { inv = b.Inventory(); return true })
+	withSpinner("Checking what's installed on this PC", func() bool { inv = b.Inventory(nil); return true })
 	return inv
 }
 
@@ -266,26 +282,27 @@ func cmdChange(kind string, args []string) {
 		dryRun = true
 	}
 	var apps []catalog.App
+	var versions map[string]string
 	if !(kind == "upgrade" && len(o.names) == 0 && len(o.presets) == 0) {
 		if len(o.names) == 0 && len(o.presets) == 0 {
 			die("Tell me what to %s, e.g.  openite %s firefox vlc   or   openite %s --preset essentials\nOr run `openite pick` to choose interactively.", kind, os.Args[1], os.Args[1])
 		}
 		var err error
-		if apps, err = resolve(o.names, o.presets); err != nil {
+		if apps, versions, err = resolve(o.names, o.presets); err != nil {
 			die("%v", err)
 		}
 	}
-	runChange(kind, apps, needBackend(), o.yes)
+	runChange(kind, apps, versions, needBackend(), o.yes)
 }
 
-func stepFor(kind string, a catalog.App, pkg string) Step {
-	return Step{Type: kind, App: a.Name, Pkg: pkg, Aliases: append([]string{a.Name}, a.Match...)}
+func stepFor(kind string, a catalog.App, pkg, version string) Step {
+	return Step{Type: kind, App: a.Name, Pkg: pkg, Version: version, Aliases: append([]string{a.Name}, a.Match...)}
 }
 
 // runChange previews, asks, then runs each app as its own step so one failure doesn't stop the rest.
-func runChange(kind string, apps []catalog.App, b Backend, yes bool) {
-	verb := map[string]string{"install": "Install", "upgrade": "Update", "uninstall": "Uninstall"}[kind]
-	ing := map[string]string{"install": "Installing", "upgrade": "Updating", "uninstall": "Removing"}[kind]
+func runChange(kind string, apps []catalog.App, versions map[string]string, b Backend, yes bool) {
+	verb := map[string]string{"install": "Install", "upgrade": "Update", "uninstall": "Uninstall", "pin": "Hold", "unpin": "Release hold on"}[kind]
+	ing := map[string]string{"install": "Installing", "upgrade": "Updating", "uninstall": "Removing", "pin": "Holding", "unpin": "Releasing"}[kind]
 	banner(strings.ToLower(verb))
 	var steps []Step
 	if kind == "upgrade" && len(apps) == 0 {
@@ -295,8 +312,12 @@ func runChange(kind string, apps []catalog.App, b Backend, yes bool) {
 		fmt.Println()
 		for _, a := range apps {
 			if pkg := a.Pkg(b.Name()); pkg != "" {
-				fmt.Printf("  %s %s\n", cyan("•"), a.Name)
-				steps = append(steps, stepFor(kind, a, pkg))
+				if v := versions[a.Key]; v != "" {
+					fmt.Printf("  %s %s %s\n", cyan("•"), a.Name, dim("version "+v))
+				} else {
+					fmt.Printf("  %s %s\n", cyan("•"), a.Name)
+				}
+				steps = append(steps, stepFor(kind, a, pkg, versions[a.Key]))
 			} else {
 				fmt.Printf("  %s %s %s\n", dim("•"), dim(a.Name), dim("(skipped: not available via "+b.Name()+")"))
 			}
@@ -420,7 +441,7 @@ func cmdPick(args []string) {
 		a, _ := catalog.Find(k)
 		sel = append(sel, a)
 	}
-	runChange("install", sel, b, false)
+	runChange("install", sel, nil, b, false)
 }
 
 // pickPlain is the no-terminal fallback (scripts, pipes): numbered lists.
@@ -434,7 +455,7 @@ func pickPlain(b Backend) {
 		return strings.TrimSpace(l)
 	}
 	fmt.Println("Openite: choose what to install.")
-	inv := b.Inventory()
+	inv := b.Inventory(nil)
 	packs := catalog.Packs()
 	fmt.Println("\nStarter presets:")
 	for i, p := range packs {
@@ -476,7 +497,7 @@ func pickPlain(b Backend) {
 	for _, f := range strings.FieldsFunc(ask("\nAdd more: numbers or names (Enter for none): "), sep) {
 		if n, err := strconv.Atoi(f); err == nil && n >= 1 && n <= len(apps) {
 			pick(apps[n-1].Key)
-		} else if r, err := resolve([]string{f}, nil); err == nil {
+		} else if r, _, err := resolve([]string{f}, nil); err == nil {
 			pick(r[0].Key)
 		}
 	}
@@ -491,5 +512,5 @@ func pickPlain(b Backend) {
 		fmt.Println("Nothing to install.")
 		return
 	}
-	runChange("install", sel, b, false)
+	runChange("install", sel, nil, b, false)
 }

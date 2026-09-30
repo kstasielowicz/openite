@@ -32,6 +32,8 @@ Needs the server ([SERVER.md](SERVER.md)). **Advanced → Auto-sync tab → Sche
 - At the set time (server clock) the server queues an **"update everything"** job on every device with that tag (or *all devices*). No days ticked = every day.
 - Devices that are **off** pick the job up when they come back online, so nothing is skipped, but it may run at an odd hour. Cancel stale jobs in **Activity** if that matters.
 - If the server was down at the scheduled minute it still fires up to 6 hours late, once per day.
+- **Held apps are skipped.** Hold an app (`openite hold <app>`, or the **Hold** button) and neither "update everything" nor a schedule touches it until you release it.
+- **Maintenance windows:** a device with a window (Device → Settings) only starts scheduled and auto-sync jobs inside it.
 - Groups of **4+ devices** with *staged rollout* go canary → 40% → rest, and stop if more than 20% of finished devices fail. Put a low-risk machine first by tagging it.
 - Everything is logged: **Activity** (per-device output) and the **Audit log** (`schedule.add`, `rollout.halted`, …).
 
@@ -45,6 +47,7 @@ Different from a schedule: Auto-sync is about **which apps should exist**, and i
 Effect:
 - Missing apps are installed on every matching device, **including new devices that join later** (enroll with a reusable key that carries the tag and they set themselves up).
 - With *keep updated*, apps from that profile are upgraded whenever a newer version appears; other apps are left alone.
+- **Pinned versions:** give an app in the profile an exact version. A device with an older one is upgraded to exactly that version, a device with the right one is left alone, and a device with a *newer* one is never downgraded automatically (it shows "Out of sync: Git 2.44.0 (has 2.50.0)" so you can decide).
 - The Devices tab shows **✔ In sync** or **Out of sync, missing: …** per device.
 - If an identical attempt already ran in the last 6 hours the server doesn't retry it, so a broken package can't loop forever.
 

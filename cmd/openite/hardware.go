@@ -116,7 +116,7 @@ func cmdDrivers([]string) {
 		case a.AppKey != "":
 			app, _ := catalog.Find(a.AppKey)
 			if confirm("    Install " + app.Name + " now?") {
-				runChange("install", []catalog.App{app}, b, true)
+				runChange("install", []catalog.App{app}, nil, b, true)
 			}
 		case a.URL != "":
 			q := "    Open the official page in your browser?"

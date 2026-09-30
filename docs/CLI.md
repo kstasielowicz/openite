@@ -25,6 +25,18 @@ Without a real terminal (scripts, pipes) it falls back to numbered lists.
 ## Names are forgiving
 `openite install "visual studio code"`, `vscode`, `vsc` all work when unambiguous; otherwise it lists the candidates. Preset names are accepted as `--preset gaming` or `preset:gaming`.
 
+## Exact versions and holds
+```powershell
+openite versions git              # list installable versions, newest first
+openite install git@2.44.0        # install exactly that version
+openite hold git                  # stop updating Git: "openite update" and scheduled updates skip it
+openite unhold git                # allow updates again
+```
+Works with winget and apt. Homebrew can only install the latest version (holds still work). In the web UI open an app's **ⓘ** details to look up versions and add one to your selection; held apps show a pause badge and are listed on the **This PC** page.
+
+## What happens when you start `openite`
+It reads your machine first (package manager, installed apps, available updates, held apps, hardware) and shows each phase with a spinner, then opens the browser with everything already filled in. If you reload the page while a rescan is running, the page shows the same progress. **Rescan** in the sidebar refreshes it on demand.
+
 ## Runtimes and prerequisites
 Category **Runtimes & prerequisites**: Visual C++ redistributables (2010 → 2015-2022, x86 and x64), .NET Desktop Runtime 8/9/10, .NET Runtime and SDK, ASP.NET Core, DirectX End-User Runtime, WebView2, Java (Temurin JRE 17/21). The preset **Runtimes for games & apps** installs the common set that fixes most "missing DLL" errors:
 ```powershell

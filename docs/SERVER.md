@@ -75,10 +75,31 @@ A reusable key doesn't expire. Treat it like a password.
 | Keep machines identical automatically | **Auto-sync** (Advanced): "devices tagged X should have profile Y". See [AUTO-UPDATES.md](AUTO-UPDATES.md). |
 | Update everything on a schedule | **Scheduled updates** (Advanced → Auto-sync tab). |
 | Run a setup script | **Scripts** (PowerShell / bash / cmd), attach to a profile or run on selected devices. |
+| Pin an exact version | Give an app a version in a **Profile**, or add it to your selection from the app's ⓘ details. Devices install exactly that version. |
+| Stop an app from updating | **Hold** in the app details or a device's **Software** tab. Held apps are skipped by "update everything" and scheduled updates. |
 | Roll out safely | Automatic for 4+ devices: canary ~10% → ~40% → rest, **halts** if >20% of finished devices fail. |
 | See what happened | **Activity** (per-device logs) and **Audit log**. |
 
 > **Scripts are remote code execution** on every device they run on. Only add scripts you trust, keep the server private, and use tags + staged rollouts.
+
+## 3b. Device pages and settings
+
+Click any device for its own page:
+- **Overview**: operating system and build, model, CPU, memory, system disk, GPU, IP addresses, time zone, uptime, agent version, whether the agent runs elevated, and whether it is a VM. Memory and disk bars turn amber or red on *free space*, not just percentage, so a 4 TB disk at 92% is not an alarm.
+- **Software**: every catalog app on that device with its installed and available version, and per-app **Update / Hold / Uninstall**.
+- **Activity**: that device's jobs.
+- **Settings**: name, tags, notes (rack, owner, purpose), and a **maintenance window**.
+
+**Maintenance window:** a daily time range (it may cross midnight, e.g. 22:00 to 05:00, in server time). Automatic work (scheduled updates and auto-sync) waits for the window; jobs you start by hand always run immediately.
+
+**Overview page** summarises the fleet: devices online, pending updates by app, operating-system mix, jobs in the last 24 h, recent failures, and a **Needs attention** list (offline over a day, low free disk, out of sync).
+
+The sidebar's **Settings** page holds server-wide options. Only the **first account** (the administrator) can change them:
+| Setting | Meaning |
+|---|---|
+| Allow new accounts to register | Turn off once your team has accounts. |
+| Check-in interval | Seconds between device polls (5-300, default 15). Agents adopt a change within one interval. |
+| Keep job history | Days of finished jobs to keep (default 90). The audit log keeps 365 days. |
 
 ## 4. Running more than one server
 
@@ -111,4 +132,5 @@ There is no federation or cross-server dashboard yet. If you need one view over 
 | Job stays "waiting" | The device is off or its agent stopped; it runs when the agent returns. Cancel it in Activity if you no longer want it. |
 | Rollout shows "not started" | The canary group failed and the rollout halted on purpose. Read the failed job log, fix, re-run. |
 | Installs fail with access denied | The agent isn't elevated. On Windows install the service from an Administrator terminal. |
+| A device shows few details | Older agents (before 0.5) don't report hardware. Update the agent (re-run the installer). |
 | An app isn't detected as installed | Add a `"match"` alias in `catalog/catalog.json` (see [CONTRIBUTING.md](../CONTRIBUTING.md)). |

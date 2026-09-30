@@ -37,24 +37,80 @@ type uiJob struct {
 	steps    []Step
 }
 
+type syncStep struct {
+	Name   string `json:"name"`
+	Status string `json:"status"` // running | done
+}
+
 type localUI struct {
 	b      Backend
 	token  string
 	mu     sync.Mutex
 	jobs   []*uiJob
 	inv    catalog.Inventory
+	sys    SysInfo
 	queue  chan *uiJob
 	hw     Hardware
 	advice []Advice
+
+	// sync progress, shown as a loader in the UI and as a spinner label in the terminal
+	syncMu     sync.Mutex
+	syncSteps  []syncStep
+	syncBusy   bool
+	everSynced bool
 }
 
 func now() float64 { return float64(time.Now().UnixNano()) / 1e9 }
 
-func (u *localUI) refresh() {
-	inv := u.b.Inventory()
+func ptr(f float64) *float64 { return &f }
+
+// syncStage marks the previous stage done and the named one running.
+func (u *localUI) syncStage(name string) {
+	u.syncMu.Lock()
+	defer u.syncMu.Unlock()
+	for i := range u.syncSteps {
+		u.syncSteps[i].Status = "done"
+	}
+	u.syncSteps = append(u.syncSteps, syncStep{name, "running"})
+}
+
+func (u *localUI) currentStage() string {
+	u.syncMu.Lock()
+	defer u.syncMu.Unlock()
+	if len(u.syncSteps) == 0 {
+		return "Connecting to " + u.b.Name()
+	}
+	return u.syncSteps[len(u.syncSteps)-1].Name
+}
+
+// sync rereads the package manager and system details. Safe to call repeatedly; overlapping calls are ignored.
+func (u *localUI) sync() {
+	u.syncMu.Lock()
+	if u.syncBusy {
+		u.syncMu.Unlock()
+		return
+	}
+	u.syncBusy, u.syncSteps = true, nil
+	u.syncMu.Unlock()
+
+	inv := u.b.Inventory(u.syncStage)
+	u.syncStage("Reading system details")
+	sys := collectSysInfo()
+	sysMu.Lock() // share the result with check-ins
+	sysCache, sysAt = sys, time.Now()
+	sysMu.Unlock()
+	hw := Hardware{GPUs: sys.GPUs, Maker: sys.Maker, Model: sys.Model, CPU: sys.CPU}
+
 	u.mu.Lock()
-	u.inv = inv
+	u.inv, u.sys, u.hw, u.advice = inv, sys, hw, driverAdvice(hw)
 	u.mu.Unlock()
+
+	u.syncMu.Lock()
+	for i := range u.syncSteps {
+		u.syncSteps[i].Status = "done"
+	}
+	u.syncBusy, u.everSynced = false, true
+	u.syncMu.Unlock()
 }
 
 func (u *localUI) worker() {
@@ -71,11 +127,9 @@ func (u *localUI) worker() {
 		u.mu.Lock()
 		j.Status, j.Log, j.Finished = st, strings.Join(lines, "\n"), ptr(now())
 		u.mu.Unlock()
-		u.refresh()
+		u.sync()
 	}
 }
-
-func ptr(f float64) *float64 { return &f }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -88,6 +142,7 @@ func fail(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
 }
 
+var hostOK = regexp.MustCompile(`^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$`)
 var iconName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*\.svg$`)
 
 func catalogHas(key, manager string) bool {
@@ -95,25 +150,36 @@ func catalogHas(key, manager string) bool {
 	return ok && a.Pkg(manager) != ""
 }
 
-var hostOK = regexp.MustCompile(`^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$`)
-
 func (u *localUI) device() map[string]any {
 	u.mu.Lock()
 	defer u.mu.Unlock()
-	have, outdated := []string{}, []string{}
+	have, outdated, held := []string{}, []string{}, []string{}
+	versions, available := map[string]string{}, map[string]string{}
 	for _, a := range catalog.Apps() {
-		in, old := a.State(u.b.Name(), u.inv)
-		if in {
+		st := a.Status(u.b.Name(), u.inv)
+		if st.Installed {
 			have = append(have, a.Key)
+			if st.Version != "" {
+				versions[a.Key] = st.Version
+			}
 		}
-		if old {
+		if st.Upgradable {
 			outdated = append(outdated, a.Key)
+			available[a.Key] = st.Available
 		}
+		if st.Held {
+			held = append(held, a.Key)
+		}
+	}
+	sys := u.sys
+	if sys.BootUnix > 0 {
+		sys.UptimeSec = time.Now().Unix() - sys.BootUnix
 	}
 	host, _ := os.Hostname()
 	return map[string]any{"id": 1, "name": host + " (this PC)", "os": osName(), "manager": u.b.Name(), "tags": []string{},
-		"last_seen": now(), "online": true, "have": have, "outdated": outdated,
-		"n_installed": len(u.inv.Installed), "n_upgradable": len(u.inv.Upgradable), "managed": false, "missing": []string{}}
+		"last_seen": now(), "online": true, "have": have, "outdated": outdated, "held": held, "versions": versions,
+		"available": available, "n_installed": len(u.inv.Installed), "n_upgradable": len(u.inv.Upgradable),
+		"managed": false, "missing": []string{}, "sysinfo": sys, "agent_version": version, "notes": "", "settings": map[string]any{}}
 }
 
 func (u *localUI) handler() http.Handler {
@@ -128,10 +194,19 @@ func (u *localUI) handler() http.Handler {
 		w.Write(web.Index)
 	})
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"home": true, "lite": true, "registration": false, "version": version})
+		writeJSON(w, 200, map[string]any{"home": true, "lite": true, "registration": false, "version": version, "manager": u.b.Name()})
 	})
 	mux.HandleFunc("/api/home", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"token": u.token, "email": "This PC", "home": true})
+	})
+	mux.HandleFunc("/api/sync", func(w http.ResponseWriter, r *http.Request) {
+		u.syncMu.Lock()
+		defer u.syncMu.Unlock()
+		writeJSON(w, 200, map[string]any{"ready": u.everSynced, "busy": u.syncBusy, "steps": u.syncSteps, "manager": u.b.Name()})
+	})
+	mux.HandleFunc("/api/rescan", func(w http.ResponseWriter, r *http.Request) {
+		go u.sync()
+		writeJSON(w, 200, map[string]any{})
 	})
 	mux.HandleFunc("/api/catalog", func(w http.ResponseWriter, r *http.Request) {
 		apps := []catalog.App{} // only what this PC's package manager can actually install
@@ -142,6 +217,16 @@ func (u *localUI) handler() http.Handler {
 		}
 		writeJSON(w, 200, apps)
 	})
+	mux.HandleFunc("/api/icons", func(w http.ResponseWriter, r *http.Request) {
+		keys := []string{}
+		if ents, err := web.Files.ReadDir("icons"); err == nil {
+			for _, e := range ents {
+				keys = append(keys, strings.TrimSuffix(e.Name(), ".svg"))
+			}
+		}
+		writeJSON(w, 200, keys)
+	})
+	mux.HandleFunc("/api/packs", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, catalog.Packs()) })
 	mux.HandleFunc("/icons/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/icons/")
 		if !iconName.MatchString(name) {
@@ -183,7 +268,23 @@ func (u *localUI) handler() http.Handler {
 		}
 		fail(w, 404, "unknown item")
 	})
-	mux.HandleFunc("/api/packs", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, catalog.Packs()) })
+	mux.HandleFunc("/api/versions", func(w http.ResponseWriter, r *http.Request) {
+		a, ok := catalog.Find(r.URL.Query().Get("key"))
+		if !ok {
+			fail(w, 404, "unknown app")
+			return
+		}
+		if !u.b.SupportsVersions() {
+			writeJSON(w, 200, map[string]any{"supported": false, "versions": []string{}})
+			return
+		}
+		vs, err := versionsFor(u.b, a)
+		if err != nil {
+			fail(w, 502, err.Error())
+			return
+		}
+		writeJSON(w, 200, map[string]any{"supported": true, "versions": vs})
+	})
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, []any{u.device()}) })
 	mux.HandleFunc("/api/profiles", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, []any{}) })
 	mux.HandleFunc("/api/jobs", func(w http.ResponseWriter, r *http.Request) {
@@ -200,8 +301,9 @@ func (u *localUI) handler() http.Handler {
 		var body struct {
 			Title string `json:"title"`
 			Steps []struct {
-				Type string `json:"type"`
-				Apps any    `json:"apps"`
+				Type     string            `json:"type"`
+				Apps     any               `json:"apps"`
+				Versions map[string]string `json:"versions"`
 			} `json:"steps"`
 		}
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body) != nil || len(body.Steps) == 0 {
@@ -210,8 +312,10 @@ func (u *localUI) handler() http.Handler {
 		}
 		var steps []Step
 		for _, s := range body.Steps {
-			if s.Type != "install" && s.Type != "upgrade" && s.Type != "uninstall" {
-				fail(w, 400, "this mode supports install, update and uninstall only")
+			switch s.Type {
+			case "install", "upgrade", "uninstall", "pin", "unpin":
+			default:
+				fail(w, 400, "this mode supports install, update, uninstall and hold only")
 				return
 			}
 			if s.Apps == "all" && s.Type == "upgrade" {
@@ -225,8 +329,13 @@ func (u *localUI) handler() http.Handler {
 					fail(w, 400, fmt.Sprintf("unknown app: %v", k))
 					return
 				}
+				ver := s.Versions[a.Key]
+				if ver != "" && !catalog.SafeVersion.MatchString(ver) {
+					fail(w, 400, fmt.Sprintf("invalid version for %s", a.Name))
+					return
+				}
 				if pkg := a.Pkg(u.b.Name()); pkg != "" {
-					steps = append(steps, stepFor(s.Type, a, pkg))
+					steps = append(steps, stepFor(s.Type, a, pkg, ver))
 				} else {
 					steps = append(steps, Step{Type: "skip", App: a.Name, Reason: "no " + u.b.Name() + " package id"})
 				}
@@ -239,8 +348,12 @@ func (u *localUI) handler() http.Handler {
 	})
 	mux.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/") // api jobs <id> cancel
+		if len(parts) != 4 || parts[3] != "cancel" {
+			fail(w, 404, "not found")
+			return
+		}
 		id, err := strconv.Atoi(parts[2])
-		if err != nil || len(parts) != 4 || parts[3] != "cancel" {
+		if err != nil {
 			fail(w, 404, "not found")
 			return
 		}
@@ -262,7 +375,8 @@ func (u *localUI) guard(next http.Handler) http.Handler {
 			fail(w, 403, "forbidden host")
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/info" && r.URL.Path != "/api/home" {
+		open := r.URL.Path == "/api/info" || r.URL.Path == "/api/home" || r.URL.Path == "/api/sync"
+		if strings.HasPrefix(r.URL.Path, "/api/") && !open {
 			if r.Header.Get("Authorization") != "Bearer "+u.token {
 				fail(w, 401, "not signed in")
 				return
@@ -309,23 +423,25 @@ func cmdUI(args []string) {
 		die("could not open a local port: %v", err)
 	}
 	url := fmt.Sprintf("http://localhost:%d", ln.Addr().(*net.TCPAddr).Port)
-	fmt.Printf("Openite is running at %s\nKeep this window open while you use it. Press Ctrl+C to quit.\n", url)
+	srv := &http.Server{Handler: u.handler(), ReadHeaderTimeout: 10 * time.Second}
+	go func() { die("%v", srv.Serve(ln)) }()
 	go u.worker()
-	go func() {
-		h := detectHardware()
-		u.mu.Lock()
-		u.hw, u.advice = h, driverAdvice(h)
-		u.mu.Unlock()
-	}()
+
+	// Read the machine first, with live progress, so the page opens fully populated.
+	banner("local interface")
+	fmt.Println()
+	withSpinnerDyn(u.currentStage, func() bool { u.sync(); return true })
+	d := u.device()
+	fmt.Printf("  %s %s\n\n", dim("Found"), dim(fmt.Sprintf("%d packages, %d updates available", d["n_installed"], d["n_upgradable"])))
+	fmt.Printf("  %s %s\n  %s\n\n", bold("Openite is running at"), cyan(url), dim("Keep this window open while you use it. Press Ctrl+C to quit."))
 	go func() {
 		for {
-			u.refresh()
 			time.Sleep(5 * time.Minute)
+			u.sync()
 		}
 	}()
 	if !*noBrowser {
 		openBrowser(url)
 	}
-	srv := &http.Server{Handler: u.handler(), ReadHeaderTimeout: 10 * time.Second}
-	die("%v", srv.Serve(ln))
+	select {}
 }

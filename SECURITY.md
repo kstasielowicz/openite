@@ -18,6 +18,8 @@ Please **don't open a public issue**. Use GitHub's private vulnerability reporti
 - **Headless uninstall.** For apps installed outside winget, Openite runs the uninstall command Windows itself stored in the registry, adding only known silent switches (MSI `/qn`, Inno `/VERYSILENT`, NSIS `/S`). Nothing from the network is ever executed, and each step has a 10-minute limit.
 - **Drivers.** Openite never downloads or installs raw driver packages. It installs vendors' own update tools from winget or opens fixed official vendor URLs.
 - **Icons.** Brand icons are static SVGs from Simple Icons (CC0) shown only inside `<img>` tags, so they can't run script; fetched by `tools/fetch_icons.py` at a pinned version.
+- **What a device reports.** Installed package names and versions, hardware model, CPU/GPU names, OS version, memory and disk sizes, IP addresses, time zone, and the name of the account running the agent. No serial numbers, files, browsing data or credentials. It goes only to the server you enrolled with.
+- **Version pins and holds.** Versions must match `^[A-Za-z0-9][A-Za-z0-9._+~:-]*$` and are checked by the UI, the server and the agent before anything runs; packages are only ever pinned through the package manager's own mechanism (`winget pin`, `apt-mark hold`, `brew pin`).
 - **Accidental installs.** Commands preview the plan and ask first; with no terminal input they cancel instead of assuming yes. `--dry-run` shows everything without changing anything.
 
 ## Known gaps (alpha)

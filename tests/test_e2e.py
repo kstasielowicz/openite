@@ -27,9 +27,9 @@ class FakeAgent:
         with urllib.request.urlopen(req) as r:
             return json.loads(r.read())
 
-    def checkin(self, installed=None, names=None, upgradable=None):
-        self.call("POST", "/api/agent/checkin", {"installed": installed or {}, "installed_names": names or {},
-                                                 "upgradable": upgradable or {}, "manager": "winget"})
+    def checkin(self, installed=None, names=None, upgradable=None, **extra):
+        return self.call("POST", "/api/agent/checkin", {"installed": installed or {}, "installed_names": names or {},
+                                                        "upgradable": upgradable or {}, "manager": "winget", **extra})
 
     def process_once(self):
         job = self.call("GET", "/api/agent/poll")["job"]
@@ -220,6 +220,102 @@ class E2E(unittest.TestCase):
             self.assertIn(b"<svg", r.read())
         with self.assertRaises(urllib.error.HTTPError):
             urllib.request.urlopen(self.base + "/icons/..%2f..%2fserver.py")
+
+
+    def test_version_and_hold_steps(self):
+        tok = self.register("ver@b.co")
+        ag, did = self.enroll(tok, "pc")
+        s, _ = self.call("POST", "/api/jobs", {"device_ids": [did], "steps": [
+            {"type": "install", "apps": ["git"], "versions": {"git": "2.44.0"}}, {"type": "pin", "apps": ["vlc"]}]}, tok)
+        self.assertEqual(s, 200)
+        steps = ag.process_once()["steps"]
+        self.assertEqual((steps[0]["type"], steps[0]["pkg"], steps[0]["version"]), ("install", "Git.Git", "2.44.0"))
+        self.assertEqual((steps[1]["type"], steps[1]["pkg"]), ("pin", "VideoLAN.VLC"))
+        for bad in ("--force", "1 2", "a;b"):
+            self.assertEqual(self.call("POST", "/api/jobs", {"device_ids": [did], "steps": [
+                {"type": "install", "apps": ["git"], "versions": {"git": bad}}]}, tok)[0], 400, bad)
+
+    def test_profile_version_pins_drive_auto_sync(self):
+        tok = self.register("pin@b.co")
+        ag, did = self.enroll(tok, "pc")
+        _, pr = self.call("POST", "/api/profiles", {"name": "pinned", "apps": [{"key": "git", "version": "2.44.0"}, "vlc"]}, tok)
+        self.assertEqual(self.call("GET", "/api/profiles", token=tok)[1][0]["apps"][1], {"key": "vlc", "version": ""})
+        ag.checkin(installed={"Git.Git": "2.40.0", "VideoLAN.VLC": "3.0"})     # the device reports what it has first
+        self.call("POST", "/api/assignments", {"tag": "all", "profile_id": pr["id"]}, tok)  # git older than the pin -> upgrade to exactly it
+        step = ag.process_once()["steps"]
+        self.assertEqual([(x["type"], x["app"], x.get("version")) for x in step], [("upgrade", "Git", "2.44.0")])
+        ag.checkin(installed={"Git.Git": "2.44.0", "VideoLAN.VLC": "3.0"})     # exactly the pin -> in sync, nothing queued
+        self.assertIsNone(ag.process_once())
+        ag.checkin(installed={"Git.Git": "2.50.0", "VideoLAN.VLC": "3.0"})     # newer than pin: never auto-downgrade, but report drift
+        self.assertIsNone(ag.process_once())
+        d = self.call("GET", "/api/devices", token=tok)[1][0]
+        self.assertEqual(d["missing"], ["Git 2.44.0 (has 2.50.0)"])
+        self.assertEqual(d["versions"]["git"], "2.50.0")
+
+    def test_held_and_available_versions_are_reported(self):
+        tok = self.register("held@b.co")
+        ag, did = self.enroll(tok, "pc")
+        ag.checkin(installed={"Git.Git": "2.44.0"}, upgradable={"Git.Git": "2.45.2"}, pinned={"Git.Git": "2.44.0"})
+        d = self.call("GET", "/api/devices", token=tok)[1][0]
+        self.assertEqual((d["held"], d["outdated"], d["available"]["git"]), (["git"], ["git"], "2.45.2"))
+
+    def test_maintenance_window_defers_automatic_jobs_only(self):
+        import datetime
+        self.assertTrue(server.in_window({}))
+        w = {"maintenance": {"start": "22:00", "end": "05:00"}}
+        self.assertTrue(server.in_window(w, datetime.datetime(2026, 1, 1, 23, 30)))
+        self.assertTrue(server.in_window(w, datetime.datetime(2026, 1, 1, 4, 59)))
+        self.assertFalse(server.in_window(w, datetime.datetime(2026, 1, 1, 12, 0)))
+
+        tok = self.register("maint@b.co")
+        ag, did = self.enroll(tok, "pc")
+        now = datetime.datetime.now()
+        closed = {"maintenance": {"start": (now + datetime.timedelta(hours=2)).strftime("%H:%M"),
+                                  "end": (now + datetime.timedelta(hours=3)).strftime("%H:%M")}}
+        self.assertEqual(self.call("PUT", f"/api/devices/{did}", {"settings": {"maintenance": {"start": "bad", "end": "05:00"}}}, tok)[0], 400)
+        self.assertEqual(self.call("PUT", f"/api/devices/{did}", {"settings": closed, "notes": "rack 4, unit 12"}, tok)[0], 200)
+        d = self.call("GET", "/api/devices", token=tok)[1][0]
+        self.assertEqual((d["settings"], d["notes"]), (closed, "rack 4, unit 12"))
+
+        _, pr = self.call("POST", "/api/profiles", {"name": "p", "apps": ["git"]}, tok)
+        self.call("POST", "/api/assignments", {"tag": "all", "profile_id": pr["id"]}, tok)   # queues an automatic job
+        self.assertIsNone(ag.process_once())                                                 # window closed: waits
+        self.call("POST", "/api/jobs", {"device_ids": [did], "steps": [{"type": "install", "apps": ["vlc"]}]}, tok)
+        self.assertEqual(ag.process_once()["steps"][0]["app"], "VLC")                        # manual job runs right away
+        self.call("PUT", f"/api/devices/{did}", {"settings": {}}, tok)                       # clear the window
+        self.assertEqual(ag.process_once()["steps"][0]["app"], "Git")                        # waiting job now runs
+
+    def test_server_settings_admin_only_and_agent_interval(self):
+        tok = self.register("admin@b.co")
+        other = self.register("user2@b.co")
+        first_admin = self.call("GET", "/api/settings", token=tok)[1]["is_admin"]
+        s, st = self.call("GET", "/api/settings", token=other)
+        self.assertFalse(st["is_admin"])
+        self.assertEqual(self.call("PUT", "/api/settings", {"poll_interval": 30}, other)[0], 403)
+        admin_tok = tok if first_admin else self.call("POST", "/api/login", {"email": "a@b.co", "password": "longenough"})[1]["token"]
+        self.assertEqual(self.call("PUT", "/api/settings", {"poll_interval": 2}, admin_tok)[0], 400)
+        self.assertEqual(self.call("PUT", "/api/settings", {"poll_interval": 45, "retention_days": 30}, admin_tok)[0], 200)
+        ag, did = self.enroll(tok, "pc")
+        self.assertEqual(ag.checkin()["interval"], 45)
+        self.assertEqual(ag.call("GET", "/api/agent/poll")["interval"], 45)
+        self.assertEqual(self.call("PUT", "/api/settings", {"registration": False}, admin_tok)[0], 200)
+        self.assertEqual(self.call("POST", "/api/register", {"email": "late@b.co", "password": "longenough"})[0], 403)
+        self.call("PUT", "/api/settings", {"registration": True, "poll_interval": 15, "retention_days": 90}, admin_tok)
+
+    def test_sysinfo_and_overview(self):
+        tok = self.register("fleet2@b.co")
+        a1, d1 = self.enroll(tok, "web-01")
+        a2, d2 = self.enroll(tok, "db-01")
+        a1.checkin(upgradable={"Git.Git": "2.5"}, installed={"Git.Git": "2.4"},
+                   sysinfo={"os": "Ubuntu 24.04 LTS", "cpu": "EPYC", "mem_total_mb": 16384, "disk_total_gb": 500, "disk_free_gb": 20, "hostname": "web-01"})
+        a2.checkin(sysinfo={"os": "Ubuntu 24.04 LTS", "mem_total_mb": 8192, "disk_total_gb": 100, "disk_free_gb": 4})
+        devs = self.call("GET", "/api/devices", token=tok)[1]
+        self.assertEqual([d["sysinfo"]["cpu"] for d in devs if d["name"] == "web-01"], ["EPYC"])
+        ov = self.call("GET", "/api/overview", token=tok)[1]
+        self.assertEqual((ov["devices"], ov["online"], ov["with_updates"], ov["ram_total_gb"]), (2, 2, 1, 24))
+        self.assertEqual(ov["pending"][0]["name"], "Git")
+        self.assertEqual(ov["by_os"][0]["count"], 2)
+        self.assertTrue(any("low disk" in a["reason"] for a in ov["attention"]))   # db-01: 4 GB of 100
 
     def test_info_is_not_lite(self):
         s, r = self.call("GET", "/api/info")

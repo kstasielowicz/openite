@@ -35,7 +35,12 @@ type Inventory struct {
 	Upgradable      map[string]string // package id -> available version
 	Names           map[string]string // display name -> version (winget lists apps installed outside winget by name only)
 	UpgradableNames map[string]string
+	Pinned          map[string]string // held package id -> version (bulk updates skip these)
+	PinnedNames     map[string]string
 }
+
+// SafeVersion is the only shape of version string we will pass to a package manager.
+var SafeVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+~:-]{0,63}$`)
 
 // SafeID is the only shape of package id we will ever pass to a package manager.
 var SafeID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+@/-]{0,127}$`)
@@ -122,17 +127,72 @@ func anyName(m map[string]string, aliases []string) bool {
 	return false
 }
 
+// AppStatus is everything the UI needs to know about one app on one device.
+type AppStatus struct {
+	Installed  bool
+	Upgradable bool
+	Held       bool
+	Version    string // installed version ("" if unknown)
+	Available  string // newer version offered by the package manager ("" if none)
+}
+
+func lookupFold(m map[string]string, id string) (string, bool) {
+	for k, v := range m {
+		if strings.EqualFold(k, id) {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+func lookupName(m map[string]string, aliases []string) (string, bool) {
+	for n, v := range m {
+		for _, al := range aliases {
+			if NameMatches(n, al) {
+				return v, true
+			}
+		}
+	}
+	return "", false
+}
+
+// Status looks the app up by package id first, then by the display name Windows lists it under.
+func (a App) Status(manager string, inv Inventory) AppStatus {
+	aliases := append([]string{a.Name}, a.Match...)
+	var st AppStatus
+	pkg := a.Pkg(manager)
+	if pkg != "" {
+		if v, ok := lookupFold(inv.Installed, pkg); ok {
+			st.Installed, st.Version = true, v
+		}
+		if v, ok := lookupFold(inv.Upgradable, pkg); ok {
+			st.Upgradable, st.Available = true, v
+		}
+		if _, ok := lookupFold(inv.Pinned, pkg); ok {
+			st.Held = true
+		}
+	}
+	if !st.Installed {
+		if v, ok := lookupName(inv.Names, aliases); ok {
+			st.Installed, st.Version = true, v
+		}
+	}
+	if !st.Upgradable {
+		if v, ok := lookupName(inv.UpgradableNames, aliases); ok {
+			st.Upgradable, st.Available = true, v
+		}
+	}
+	if !st.Held {
+		if _, ok := lookupName(inv.PinnedNames, aliases); ok {
+			st.Held = true
+		}
+	}
+	st.Installed = st.Installed || st.Upgradable
+	return st
+}
+
 // State says whether the app is installed and whether an update is available.
 func (a App) State(manager string, inv Inventory) (installed, upgradable bool) {
-	aliases := append([]string{a.Name}, a.Match...)
-	if pkg := a.Pkg(manager); pkg != "" {
-		installed, upgradable = hasFold(inv.Installed, pkg), hasFold(inv.Upgradable, pkg)
-	}
-	if !installed {
-		installed = anyName(inv.Names, aliases)
-	}
-	if !upgradable {
-		upgradable = anyName(inv.UpgradableNames, aliases)
-	}
-	return installed || upgradable, upgradable
+	st := a.Status(manager, inv)
+	return st.Installed, st.Upgradable
 }

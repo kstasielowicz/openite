@@ -2,7 +2,7 @@
 
 Open-source Ninite-style software manager. Pick apps, press Install; keep one PC, a home lab or a whole fleet installed and up to date. It uses your OS's own package manager (winget / Homebrew / apt), so software always comes from official sources. MIT licensed, zero dependencies.
 
-**What you get:** 87 apps with icons · starter presets · runtimes (.NET, Visual C++, DirectX, Java) · driver guidance · silent uninstall · automatic updates · one static binary · optional multi-device server.
+**What you get:** 87 apps with icons · starter presets · exact versions and update holds · runtimes (.NET, Visual C++, DirectX, Java) · driver guidance · silent uninstall · automatic updates · hardware and health details for every machine · one static binary · optional multi-device server.
 
 ## Quick start (Windows)
 
@@ -25,10 +25,12 @@ Linux/macOS: `curl -fsSL https://raw.githubusercontent.com/kstasielowicz/openite
 
 | I want to… | Do this |
 |---|---|
-| Click around | `openite` opens a web page for this PC: pick a starter pack or apps, press **Install**. The bar at the bottom always shows what you picked. |
+| Click around | `openite` reads your PC (with a live progress display), then opens a web page: pick a starter pack or apps and press **Install**. The panel on the right always shows what you picked; the **This PC** page shows your hardware, health and updates. |
 | Choose in the terminal | `openite pick`: arrow keys, **Space** to tick, **Enter** to install |
 | One-liner install | `openite install firefox vlc vivaldi` or `openite install --preset developer` |
 | See before doing | add `--dry-run` to anything |
+| Install an exact version | `openite install git@2.44.0` (`openite versions git` lists what's available) |
+| Stop an app from updating | `openite hold git` (released with `openite unhold git`); "update everything" skips held apps |
 | Update everything | `openite update` |
 | Update automatically | `openite schedule daily 03:00` |
 | Uninstall without clicking | `openite uninstall qbittorrent` |
