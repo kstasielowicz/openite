@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs the Openite CLI for the current user (no sudo) on Linux/macOS, verifying its checksum.
 #   curl -fsSL https://raw.githubusercontent.com/kstasielowicz/openite/main/install.sh | sh
-#   curl -fsSL .../install.sh | sh -s -- --version v0.3.0 --preset developer --yes
+#   curl -fsSL .../install.sh | sh -s -- --version v0.4.0 --preset developer --yes
 # It only downloads the release binary + SHA256SUMS over HTTPS, verifies, and copies to ~/.local/bin.
 # Read it before running it.
 set -eu

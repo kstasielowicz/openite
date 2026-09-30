@@ -1,5 +1,5 @@
 name: Release
-# Push a tag like v0.3.0 to publish. Everything a user downloads is built here from the tagged source,
+# Push a tag like v0.5.0 to publish. Everything a user downloads is built here from the tagged source,
 # listed in SHA256SUMS and covered by a GitHub build-provenance attestation (verifiable with `gh attestation verify`).
 on:
   push:
