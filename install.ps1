@@ -14,12 +14,12 @@
 
 .EXAMPLE
   # install the tool, then look around
-  irm https://raw.githubusercontent.com/openite/openite/main/install.ps1 | iex
+  irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1 | iex
   openite pick
 
 .EXAMPLE
   # install the tool and a preset in one go (pin a version for repeatability)
-  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/openite/openite/main/install.ps1))) -Preset developer -Apps vivaldi -Yes
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1))) -Preset developer -Apps vivaldi -Yes
 #>
 param(
   [string]$Version = "latest",      # e.g. v0.3.0 (recommended: pin one)
@@ -27,7 +27,7 @@ param(
   [string[]]$Preset,                # e.g. -Preset essentials,gaming
   [switch]$Yes,                     # don't ask before installing the apps
   [switch]$NoPath,                  # don't modify PATH
-  [string]$Repo = "openite/openite",# owner/name of the GitHub repository
+  [string]$Repo = "kstasielowicz/openite",# owner/name of the GitHub repository
   [string]$BaseUrl,                 # download from here instead of GitHub (e.g. an internal mirror); checksum still enforced
   [string]$InstallDir               # default: %LOCALAPPDATA%\Programs\Openite
 )

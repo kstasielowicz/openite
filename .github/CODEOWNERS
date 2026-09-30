@@ -1,8 +1,8 @@
 # Changes to what users install or how they get it need a maintainer's review.
-# Replace @openite/maintainers with your GitHub team/user, and require code-owner review in branch protection.
-/catalog/                 @openite/maintainers
-/install.ps1              @openite/maintainers
-/install.sh               @openite/maintainers
-/installer/               @openite/maintainers
-/.github/                 @openite/maintainers
-/cmd/openite/backend.go   @openite/maintainers
+# Replace @kstasielowicz with your GitHub team/user, and require code-owner review in branch protection.
+/catalog/                 @kstasielowicz
+/install.ps1              @kstasielowicz
+/install.sh               @kstasielowicz
+/installer/               @kstasielowicz
+/.github/                 @kstasielowicz
+/cmd/openite/backend.go   @kstasielowicz

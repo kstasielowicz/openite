@@ -23,5 +23,5 @@ No login rate-limiting, 2FA/SSO or roles on the fleet server; no built-in TLS (u
 ## Verifying a release
 ```powershell
 Get-FileHash .\openite-windows-amd64.exe -Algorithm SHA256   # compare with SHA256SUMS
-gh attestation verify .\openite-windows-amd64.exe --repo openite/openite
+gh attestation verify .\openite-windows-amd64.exe --repo kstasielowicz/openite
 ```

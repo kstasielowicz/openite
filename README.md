@@ -8,18 +8,18 @@ Open-source Ninite-style software manager. Pick apps, press Install; keep one PC
 
 **PowerShell one-liner** (installs the tool only; it installs no apps unless you ask):
 ```powershell
-irm https://raw.githubusercontent.com/openite/openite/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1 | iex
 openite pick
 ```
 Install tool + apps in one go (pin a version in real use; `-Yes` skips the confirmation):
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/openite/openite/main/install.ps1))) -Version v0.3.0 -Preset developer -Apps vivaldi,obs -Yes
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/kstasielowicz/openite/main/install.ps1))) -Version v0.3.0 -Preset developer -Apps vivaldi,obs -Yes
 ```
-Linux/macOS: `curl -fsSL https://raw.githubusercontent.com/openite/openite/main/install.sh | sh -s -- --preset essentials --yes`
+Linux/macOS: `curl -fsSL https://raw.githubusercontent.com/kstasielowicz/openite/main/install.sh | sh -s -- --preset essentials --yes`
 
 > `irm | iex` runs code from the internet: [read the script](install.ps1) first (it's ~80 lines). It downloads one binary over HTTPS, **verifies its SHA-256** (and GitHub's signed build attestation if you have `gh`), installs per-user, nothing else. Not comfortable with that? Download from Releases and verify by hand ([SECURITY.md](SECURITY.md)).
 >
-> *Replace `openite/openite` in the URLs with the real GitHub repository path once published.*
+> *Replace `kstasielowicz/openite` in the URLs with the real GitHub repository path once published.*
 
 ## Using it
 
