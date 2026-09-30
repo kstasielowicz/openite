@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {persist-credentials: false}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: {name: binaries, path: dist}
       - run: choco install innosetup --no-progress -y
       - shell: bash
@@ -44,7 +44,7 @@ jobs:
       id-token: write        # sign attestations
       attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: {path: dist, merge-multiple: true}
       - name: Checksums
         working-directory: dist
