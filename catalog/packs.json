@@ -1,9 +1,9 @@
 [
-  {"id":"essentials","name":"Everyday essentials","icon":"⭐","apps":["firefox","vlc","7zip","libreoffice","keepassxc"]},
-  {"id":"developer","name":"Developer","icon":"💻","apps":["git","vscode","python","nodejs","windows-terminal","github-cli","docker"]},
-  {"id":"gaming","name":"Gaming","icon":"🎮","apps":["steam","discord","epic","obs"]},
-  {"id":"creator","name":"Creator","icon":"🎨","apps":["gimp","inkscape","blender","audacity","obs","krita"]},
-  {"id":"homelab","name":"Home lab","icon":"🏠","apps":["docker","tailscale","wireguard","syncthing","putty","winscp","github-cli"]},
-  {"id":"privacy","name":"Privacy & security","icon":"🔒","apps":["brave","signal","bitwarden","keepassxc","wireguard","malwarebytes"]},
-  {"id":"runtimes","name":"Runtimes for games & apps","icon":"🧩","apps":["vcredist-2015-x64","vcredist-2015-x86","vcredist-2013-x64","vcredist-2012-x64","vcredist-2010-x64","dotnet-desktop-8","dotnet-desktop-9","directx","webview2"]}
+  {"id":"essentials","name":"Everyday essentials","icon":"⭐","apps":["firefox","vlc","7zip","libreoffice","keepassxc"],"desc":"Browser, media player, archiver, office suite and a password manager."},
+  {"id":"developer","name":"Developer","icon":"💻","apps":["git","vscode","python","nodejs","windows-terminal","github-cli","docker"],"desc":"Git, an editor, language runtimes and containers for building software."},
+  {"id":"gaming","name":"Gaming","icon":"🎮","apps":["steam","discord","epic","obs"],"desc":"Game launchers, chat and streaming."},
+  {"id":"creator","name":"Creator","icon":"🎨","apps":["gimp","inkscape","blender","audacity","obs","krita"],"desc":"Image, vector, 3D, audio and video tools."},
+  {"id":"homelab","name":"Home lab","icon":"🏠","apps":["docker","tailscale","wireguard","syncthing","putty","winscp","github-cli"],"desc":"Networking, sync and remote-access tools for your lab."},
+  {"id":"privacy","name":"Privacy & security","icon":"🔒","apps":["brave","signal","bitwarden","keepassxc","wireguard","malwarebytes"],"desc":"Private browsing, encrypted messaging and password tools."},
+  {"id":"runtimes","name":"Runtimes for games & apps","icon":"🧩","apps":["vcredist-2015-x64","vcredist-2015-x86","vcredist-2013-x64","vcredist-2012-x64","vcredist-2010-x64","dotnet-desktop-8","dotnet-desktop-9","directx","webview2"],"desc":"Libraries many games and apps need to start: Visual C++, .NET, DirectX."}
 ]

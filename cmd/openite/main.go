@@ -14,11 +14,15 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/openite/openite/catalog"
 )
+
+// longPolled is true when the last poll was already held open by the server, so the loop can poll again at once.
+var longPolled atomic.Bool
 
 // pollInterval is the server-provided seconds between polls (0 = use the --interval flag).
 var pollInterval atomic.Int64
@@ -33,6 +37,7 @@ type Config struct {
 
 type Step struct {
 	Type    string `json:"type"`
+	Key     string `json:"key"` // catalog key, so a UI can show progress on the right app card
 	App     string `json:"app"`
 	Pkg     string `json:"pkg"`
 	All     bool   `json:"all"`
@@ -127,7 +132,7 @@ func tail(s string, n int) string {
 	return s
 }
 
-func runScript(s Step) (int, string) {
+func runScript(s Step, onLine func(string)) (int, string) {
 	ext, argv := "", []string(nil)
 	switch s.Shell {
 	case "powershell":
@@ -151,11 +156,29 @@ func runScript(s Step) (int, string) {
 	defer os.Remove(f.Name())
 	f.WriteString(s.Body)
 	f.Close()
-	return run(append(argv, f.Name()), nil, time.Hour)
+	return runLive(append(argv, f.Name()), nil, time.Hour, onLine)
 }
 
-// executeJob runs every step and reports each log line through emit as it happens.
-func executeJob(job Job, b Backend, emit func(string)) string {
+// jobHooks lets a caller watch a job while it runs: raw output lines, and a status for each step.
+type jobHooks struct {
+	Line func(string)
+	Step func(i int, status, hint string) // status: running | done | failed | skipped
+}
+
+func (h jobHooks) line(s string) {
+	if h.Line != nil {
+		h.Line(s)
+	}
+}
+
+func (h jobHooks) step(i int, status, hint string) {
+	if h.Step != nil {
+		h.Step(i, status, hint)
+	}
+}
+
+// executeJob runs every step in order and reports progress through hk as it happens.
+func executeJob(job Job, b Backend, hk jobHooks) string {
 	failed := false
 	for n, s := range job.Steps {
 		label := map[string]string{"install": "install " + s.App, "uninstall": "uninstall " + s.App,
@@ -167,16 +190,18 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 		if s.Type == "upgrade" && s.All {
 			label = "upgrade all"
 		}
-		emit(fmt.Sprintf("=== [%d/%d] %s", n+1, len(job.Steps), label))
+		hk.line(fmt.Sprintf("=== [%d/%d] %s", n+1, len(job.Steps), label))
 		if s.Type == "skip" {
-			emit("skipped: " + s.Reason)
+			hk.line("skipped: " + s.Reason)
+			hk.step(n, "skipped", s.Reason)
 			continue
 		}
+		hk.step(n, "running", "")
 		var code int
 		var out string
 		good := true
 		if s.Type == "script" {
-			code, out = runScript(s)
+			code, out = runScript(s, hk.Line)
 			good = code == 0
 		} else {
 			pkg := s.Pkg
@@ -185,15 +210,19 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 			}
 			var cmds [][]string
 			switch {
-			case s.Type == "uninstall" && b.Name() == "winget" && runtime.GOOS == "windows" && (pkg == "" || catalog.SafeID.MatchString(pkg)):
+			case s.Type == "uninstall" && b.Name() == "winget" && runtime.GOOS == "windows" && os.Getenv("OPENITE_DEMO") == "" && (pkg == "" || catalog.SafeID.MatchString(pkg)):
 				code, out = smartUninstall(s, b)
 				good = b.OK(code)
+				hk.line(strings.TrimSpace(out))
 			case pkg != "" && !catalog.SafeID.MatchString(pkg): // never hand odd-looking ids (e.g. "--flag") to a package manager
 				good, out = false, fmt.Sprintf("refusing unsafe package id %q", pkg)
+				hk.line(out)
 			case s.Version != "" && !catalog.SafeVersion.MatchString(s.Version):
 				good, out = false, fmt.Sprintf("refusing unsafe version %q", s.Version)
+				hk.line(out)
 			case s.Version != "" && !b.SupportsVersions():
 				good, out = false, b.Name()+" cannot install a specific version"
+				hk.line(out)
 			case s.Type == "install":
 				cmds = b.Install(pkg, s.Version)
 			case s.Type == "uninstall":
@@ -206,10 +235,11 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 				cmds = b.Unpin(pkg)
 			default:
 				good, out = false, "unknown step type "+s.Type
+				hk.line(out)
 			}
 			for _, c := range cmds {
 				var o string
-				code, o = run(c, b.Env(), time.Hour)
+				code, o = runLive(c, b.Env(), time.Hour, hk.Line)
 				out += o + "\n"
 				if !b.OK(code) {
 					good = false
@@ -217,11 +247,19 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 				}
 			}
 		}
-		emit(tail(out, 20000))
+		if ap, ok := b.(Applier); ok {
+			ap.Apply(s, good)
+		}
 		if good {
-			emit("-> ok")
+			hk.line("-> ok")
+			hk.step(n, "done", "")
 		} else {
-			emit(fmt.Sprintf("-> FAILED (exit %d)", code))
+			hk.line(fmt.Sprintf("-> FAILED (exit %d)", code))
+			hint := explainFailure(code, out)
+			if hint != "" {
+				hk.line("hint: " + hint)
+			}
+			hk.step(n, "failed", hint)
 			failed = true
 		}
 	}
@@ -231,14 +269,94 @@ func executeJob(job Job, b Backend, emit func(string)) string {
 	return "done"
 }
 
-func processOnce(cfg Config, b Backend) (bool, error) {
+// progressSender streams a running job to the server about once a second (live log plus per-step status),
+// so the web UI shows installs as they happen. The final result still goes through /result.
+type progressSender struct {
+	cfg   Config
+	id    int
+	mu    sync.Mutex
+	lines []string
+	steps map[int]map[string]string
+	dirty bool
+	stop  chan struct{}
+	done  chan struct{}
+}
+
+func newProgressSender(cfg Config, id int) *progressSender {
+	p := &progressSender{cfg: cfg, id: id, steps: map[int]map[string]string{}, stop: make(chan struct{}), done: make(chan struct{})}
+	go p.loop()
+	return p
+}
+
+func (p *progressSender) hooks() jobHooks {
+	return jobHooks{
+		Line: func(l string) { p.mu.Lock(); p.lines = append(p.lines, l); p.dirty = true; p.mu.Unlock() },
+		Step: func(i int, status, hint string) {
+			p.mu.Lock()
+			p.steps[i] = map[string]string{"status": status, "hint": hint}
+			p.dirty = true
+			p.mu.Unlock()
+		},
+	}
+}
+
+func (p *progressSender) text() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return strings.Join(p.lines, "\n")
+}
+
+func (p *progressSender) flush() {
+	p.mu.Lock()
+	if !p.dirty {
+		p.mu.Unlock()
+		return
+	}
+	steps := make([]map[string]any, 0, len(p.steps))
+	for i, s := range p.steps {
+		steps = append(steps, map[string]any{"i": i, "status": s["status"], "hint": s["hint"]})
+	}
+	log := tail(strings.Join(p.lines, "\n"), 60000)
+	p.dirty = false
+	p.mu.Unlock()
+	api(p.cfg, "POST", fmt.Sprintf("/api/agent/jobs/%d/progress", p.id), map[string]any{"log": log, "steps": steps}, nil, true) // best effort
+}
+
+func (p *progressSender) loop() {
+	defer close(p.done)
+	t := time.NewTicker(1200 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			p.flush()
+		case <-p.stop:
+			return
+		}
+	}
+}
+
+// finish stops the ticker and sends whatever is still pending, so the last step's status always reaches the server.
+func (p *progressSender) finish() {
+	close(p.stop)
+	<-p.done
+	p.flush()
+}
+
+func processOnce(cfg Config, b Backend, longPoll bool) (bool, error) {
 	var res struct {
 		Job      *Job
 		Interval int
+		Long     bool
 	}
-	if err := api(cfg, "GET", "/api/agent/poll", nil, &res, true); err != nil {
+	path := "/api/agent/poll"
+	if longPoll {
+		path += "?wait=20" // the server holds the request until work arrives; older servers ignore it and answer at once
+	}
+	if err := api(cfg, "GET", path, nil, &res, true); err != nil {
 		return false, err
 	}
+	longPolled.Store(res.Long)
 	if res.Interval >= 5 && res.Interval <= 300 {
 		pollInterval.Store(int64(res.Interval)) // the server decides how often devices check in
 	}
@@ -246,10 +364,10 @@ func processOnce(cfg Config, b Backend) (bool, error) {
 		return false, nil
 	}
 	fmt.Printf("job %d: %s\n", res.Job.ID, res.Job.Title)
-	var lines []string
-	status := executeJob(*res.Job, b, func(l string) { lines = append(lines, l) })
-	log := strings.Join(lines, "\n")
-	err := api(cfg, "POST", fmt.Sprintf("/api/agent/jobs/%d/result", res.Job.ID), map[string]string{"status": status, "log": log}, nil, true)
+	ps := newProgressSender(cfg, res.Job.ID)
+	status := executeJob(*res.Job, b, ps.hooks())
+	ps.finish()
+	err := api(cfg, "POST", fmt.Sprintf("/api/agent/jobs/%d/result", res.Job.ID), map[string]string{"status": status, "log": ps.text()}, nil, true)
 	checkin(cfg, b)
 	return true, err
 }
@@ -328,7 +446,7 @@ func cmdRun(args []string, loop bool) {
 		}
 		for {
 			var did bool
-			did, err = processOnce(cfg, b)
+			did, err = processOnce(cfg, b, loop) // `once` must never wait
 			if err != nil || !did {
 				break
 			}
@@ -341,6 +459,10 @@ func cmdRun(args []string, loop bool) {
 		}
 		if !loop {
 			return
+		}
+		if err == nil && longPolled.Load() {
+			time.Sleep(300 * time.Millisecond) // the server already made us wait; ask again right away
+			continue
 		}
 		// Jitter so thousands of agents don't hit the server in lockstep; back off while the server is unreachable.
 		d := time.Duration(*interval) * time.Second
@@ -388,6 +510,8 @@ func main() {
 		cmdDrivers(rest)
 	case "versions":
 		cmdVersions(rest)
+	case "demo-step": // hidden: child process of the demo backend
+		cmdDemoStep(rest)
 	case "schedule":
 		cmdSchedule(rest)
 	case "install":

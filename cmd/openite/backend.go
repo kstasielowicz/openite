@@ -65,6 +65,9 @@ func probe(argv []string, env []string, timeout time.Duration) (int, string) {
 func have(bin string) bool { _, err := exec.LookPath(bin); return err == nil }
 
 func pickBackend() Backend {
+	if os.Getenv("OPENITE_DEMO") != "" {
+		return newDemoBackend()
+	}
 	if dryRun {
 		return &dryBackend{}
 	}

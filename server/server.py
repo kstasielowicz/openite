@@ -65,7 +65,49 @@ MIGRATIONS = [
     ("jobs", "rollout_id", "TEXT"),
     ("jobs", "batch", "INTEGER DEFAULT 0"),
     ("jobs", "rollout_max_fail", "INTEGER DEFAULT 20"),
+    ("jobs", "progress", "TEXT DEFAULT '[]'"),
 ]
+
+
+class Broker:
+    """Wakes every open /api/events stream of an account when anything about it changes. Streams carry no data, only
+    "something changed": the browser then refetches what it shows. Simple, and nothing can go stale."""
+
+    def __init__(self):
+        self.cond = threading.Condition()
+        self.ver = {}
+
+    def notify(self, account):
+        with self.cond:
+            self.ver[account] = self.ver.get(account, 0) + 1
+            self.cond.notify_all()
+
+    def version(self, account):
+        with self.cond:
+            return self.ver.get(account, 0)
+
+    def wait(self, account, last, timeout):
+        with self.cond:
+            if self.ver.get(account, 0) == last:
+                self.cond.wait(timeout)
+            return self.ver.get(account, 0)
+
+
+BROKER = Broker()
+_pending = threading.local()
+
+
+def queue_notify(key):
+    """Wake whoever waits on `key` once the current transaction is committed (see flush_notify)."""
+    if not hasattr(_pending, "keys"):
+        _pending.keys = set()
+    _pending.keys.add(key)
+
+
+def flush_notify():
+    for k in getattr(_pending, "keys", ()):
+        BROKER.notify(k)
+    _pending.keys = set()
 
 
 class ApiError(Exception):
@@ -289,7 +331,7 @@ def maybe_reconcile(db, account, dev):
             continue
         st = app_status(app, dev["manager"], inv)
         ver = cfg["version"]
-        step = {"type": "install", "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))}
+        step = {"type": "install", "key": k, "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))}
         if ver:
             step["version"] = ver
         if not st["installed"]:
@@ -310,6 +352,7 @@ def maybe_reconcile(db, account, dev):
         return  # identical attempt recently; don't loop forever on something that can't succeed
     db.execute("INSERT INTO jobs(account_id,device_id,title,steps,status,created,source) VALUES(?,?,?,?,?,?,'reconcile')",
                (account, dev["id"], "Auto-sync with assigned profiles", json.dumps(steps), "queued", time.time()))
+    queue_notify(("d", dev["id"]))
 
 
 def resolve_step(step, device, catalog, scripts, profiles):
@@ -332,12 +375,12 @@ def resolve_step(step, device, catalog, scripts, profiles):
                 raise ApiError(400, f"invalid version for {app['name']}")
             pkg = app.get(mgr)
             if pkg:
-                entry = {"type": kind, "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))}
+                entry = {"type": kind, "key": k, "app": app["name"], "pkg": pkg, "aliases": [app["name"]] + list(app.get("match", []))}
                 if ver:
                     entry["version"] = ver
                 out.append(entry)
             else:
-                out.append({"type": "skip", "app": app["name"], "reason": f"no {mgr or 'package manager'} package id"})
+                out.append({"type": "skip", "key": k, "app": app["name"], "reason": f"no {mgr or 'package manager'} package id"})
     elif kind == "script":
         s = scripts.get(step.get("script_id"))
         if not s:
@@ -658,15 +701,40 @@ def create_jobs(db, account, actor, body, source="manual"):
             "INSERT INTO jobs(account_id,device_id,title,steps,status,created,rollout_id,batch,rollout_max_fail,source) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (account, dev["id"], title, json.dumps(resolved), "queued", time.time(), rid, batch_of[i] if rollout else 0, max_fail, source))
         ids.append(cur.lastrowid)
+        queue_notify(("d", dev["id"]))
     audit(db, account, actor, "job.create",
           f"{title} on {len(order)} device(s)" + (f", staged rollout {plan_batches(len(order))}" if rollout else ""))
     return {"job_ids": ids, "rollout_id": rid, "batches": plan_batches(len(order)) if rollout else None}
 
 
+def job_steps(r):
+    """Planned steps merged with the status the agent reported while running (so the UI can show progress per app)."""
+    prog = {p["i"]: p for p in json.loads(r["progress"] or "[]")}
+    out = []
+    for i, st in enumerate(json.loads(r["steps"])):
+        p = prog.get(i, {})
+        if p.get("status"):
+            status = p["status"]
+            if status == "running" and r["status"] in ("done", "failed", "cancelled"):
+                status = "done" if r["status"] == "done" else "unknown"  # a last update was lost; don't leave a spinner on a finished job
+        elif st.get("type") == "skip":
+            status = "skipped"
+        elif r["status"] == "done":
+            status = "done"
+        elif r["status"] == "failed":
+            status = "unknown"  # an older agent that didn't report per-step results
+        else:
+            status = "queued"
+        out.append({"key": st.get("key", ""), "app": "everything" if st.get("all") else (st.get("app") or st.get("name") or ""),
+                    "type": st.get("type", ""), "version": st.get("version", ""), "status": status,
+                    "hint": p.get("hint") or (st.get("reason", "") if st.get("type") == "skip" else "")})
+    return out
+
+
 def job_view(r):
     return {"id": r["id"], "device_id": r["device_id"], "title": r["title"], "status": r["status"], "log": r["log"],
             "created": r["created"], "started": r["started"], "finished": r["finished"], "source": r["source"],
-            "rollout_id": r["rollout_id"], "batch": r["batch"]}
+            "rollout_id": r["rollout_id"], "batch": r["batch"], "steps": job_steps(r)}
 
 
 def h_jobs(ctx, body):
@@ -749,6 +817,7 @@ def run_due_schedules(now=None):
             except ApiError:
                 pass  # no devices with that tag right now
         db.commit()
+        flush_notify()
     finally:
         db.close()
     return started
@@ -870,11 +939,11 @@ def h_agent_checkin(ctx, body):
     return {"interval": poll_interval(ctx.db)}
 
 
-def h_agent_poll(ctx, body):
+def claim_job(ctx):
+    """Hand the device its next runnable job (marking it running), or None. Respects maintenance windows and rollouts."""
     ctx.db.execute("UPDATE devices SET last_seen=? WHERE id=?", (time.time(), ctx.device))
     settings = json.loads(ctx.db.execute("SELECT settings FROM devices WHERE id=?", (ctx.device,)).fetchone()["settings"] or "{}")
     window_open = in_window(settings)
-    interval = poll_interval(ctx.db)
     for row in ctx.db.execute("SELECT * FROM jobs WHERE device_id=? AND status='queued' ORDER BY id", (ctx.device,)).fetchall():
         if row["source"] in ("reconcile", "schedule") and not window_open:
             continue  # automatic work waits for the device's maintenance window; jobs you start by hand run right away
@@ -882,9 +951,52 @@ def h_agent_poll(ctx, body):
                 "SELECT 1 FROM jobs WHERE rollout_id=? AND batch<? AND status IN ('queued','running') LIMIT 1",
                 (row["rollout_id"], row["batch"])).fetchone():
             continue  # earlier batch still in flight
-        ctx.db.execute("UPDATE jobs SET status='running', started=? WHERE id=?", (time.time(), row["id"]))
-        return {"job": {"id": row["id"], "title": row["title"], "steps": json.loads(row["steps"])}, "interval": interval}
-    return {"job": None, "interval": interval}
+        ctx.db.execute("UPDATE jobs SET status='running', started=?, progress='[]' WHERE id=?", (time.time(), row["id"]))
+        ctx.dirty = True
+        return {"id": row["id"], "title": row["title"], "steps": json.loads(row["steps"])}
+    return None
+
+
+MAX_LONG_POLL = 25
+
+
+def h_agent_poll(ctx, body):
+    """Next job for this device. With ?wait=N the answer is held (up to 25 s) until work arrives: devices start jobs the
+    moment you press the button, and idle fleets cost one open request per device instead of one every few seconds."""
+    interval = poll_interval(ctx.db)
+    try:
+        wait = max(0, min(int(ctx.query.get("wait") or 0), MAX_LONG_POLL))
+    except ValueError:
+        wait = 0
+    key = ("d", ctx.device)
+    seen = BROKER.version(key)
+    job = claim_job(ctx)
+    if job or not wait:
+        return {"job": job, "interval": interval}
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        ctx.db.commit()  # never sit on SQLite's write lock while waiting
+        v = BROKER.wait(key, seen, min(5, max(0.1, deadline - time.time())))
+        if v != seen:
+            seen = v
+            job = claim_job(ctx)
+            if job:
+                return {"job": job, "interval": interval}
+    return {"job": None, "interval": interval, "long": True}
+
+
+def h_agent_progress(ctx, body, jid):
+    """Live output and per-step status from a running job. Best effort: the final /result is what counts."""
+    row = ctx.db.execute("SELECT status FROM jobs WHERE id=? AND device_id=?", (jid, ctx.device)).fetchone()
+    if not row or row["status"] != "running":
+        return {}
+    steps = []
+    for st in body.get("steps") or []:
+        if isinstance(st, dict) and isinstance(st.get("i"), int) and st.get("status") in ("running", "done", "failed", "skipped"):
+            steps.append({"i": st["i"], "status": st["status"], "hint": str(st.get("hint") or "")[:400]})
+    ctx.db.execute("UPDATE jobs SET log=?, progress=? WHERE id=?", (str(body.get("log") or "")[-200_000:], json.dumps(steps), jid))
+    ctx.dirty = True
+    return {}
 
 
 def h_agent_result(ctx, body, jid):
@@ -936,6 +1048,7 @@ ROUTES = [
     ("POST", r"/api/agent/enroll", h_agent_enroll, "none"),
     ("POST", r"/api/agent/checkin", h_agent_checkin, "device"),
     ("GET", r"/api/agent/poll", h_agent_poll, "device"),
+    ("POST", r"/api/agent/jobs/(\d+)/progress", h_agent_progress, "device"),
     ("POST", r"/api/agent/jobs/(\d+)/result", h_agent_result, "device"),
 ]
 ROUTES = [(m, re.compile(p + r"$"), f, a) for m, p, f, a in ROUTES]
@@ -943,6 +1056,7 @@ ROUTES = [(m, re.compile(p + r"$"), f, a) for m, p, f, a in ROUTES]
 
 class Ctx:
     db = account = device = handler = query = None
+    dirty = False  # a GET that changed something (job started, progress) also wakes the event streams
     actor = "anonymous"
 
 
@@ -966,6 +1080,38 @@ class Handler(BaseHTTPRequestHandler):
         a = self.headers.get("Authorization", "")
         return a[7:] if a.startswith("Bearer ") else ""
 
+    def serve_events(self):
+        """Server-sent events: one long-lived response per browser tab. HTTP/1.0 style (no chunking), ends on disconnect."""
+        db = connect()
+        try:
+            r = db.execute("SELECT account_id FROM sessions WHERE token=? AND created>?", (self.bearer(), time.time() - SESSION_TTL)).fetchone()
+        finally:
+            db.close()
+        if not r:
+            self.send_json(401, {"error": "not signed in"})
+            return
+        account = r["account_id"]
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        self.close_connection = True
+        last = BROKER.version(account)
+        try:
+            self.wfile.write(b"retry: 2000\n\nevent: hello\ndata: {}\n\n")
+            self.wfile.flush()
+            while True:
+                v = BROKER.wait(account, last, 15)
+                if v != last:
+                    last = v
+                    self.wfile.write(b"event: change\ndata: {}\n\n")
+                else:
+                    self.wfile.write(b": keepalive\n\n")
+                self.wfile.flush()
+        except OSError:
+            pass  # the tab closed
+
     def dispatch(self, method):
         path, _, qs = self.path.partition("?")
         if method == "GET" and re.fullmatch(r"/icons/[a-z0-9][a-z0-9._-]*\.svg", path):
@@ -988,6 +1134,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'")
             self.end_headers()
             self.wfile.write(data)
+            return
+        if method == "GET" and path == "/api/events":
+            self.serve_events()
             return
         try:
             for m, rx, fn, auth in ROUTES:
@@ -1024,6 +1173,9 @@ class Handler(BaseHTTPRequestHandler):
                 args = [int(g) if g.isdigit() and fn is not h_del_app else g for g in mt.groups()]
                 res = fn(ctx, body, *args)
                 db.commit()
+                flush_notify()
+                if ctx.account and (method != "GET" or ctx.dirty):
+                    BROKER.notify(ctx.account)  # after the commit, so a refetch sees the new state
             except BaseException:
                 db.rollback()
                 raise

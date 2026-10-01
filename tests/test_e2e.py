@@ -31,6 +31,9 @@ class FakeAgent:
         return self.call("POST", "/api/agent/checkin", {"installed": installed or {}, "installed_names": names or {},
                                                         "upgradable": upgradable or {}, "manager": "winget", **extra})
 
+    def progress(self, jid, steps, log):
+        return self.call("POST", f"/api/agent/jobs/{jid}/progress", {"steps": steps, "log": log})
+
     def process_once(self):
         job = self.call("GET", "/api/agent/poll")["job"]
         if not job:
@@ -316,6 +319,107 @@ class E2E(unittest.TestCase):
         self.assertEqual(ov["pending"][0]["name"], "Git")
         self.assertEqual(ov["by_os"][0]["count"], 2)
         self.assertTrue(any("low disk" in a["reason"] for a in ov["attention"]))   # db-01: 4 GB of 100
+
+
+    def test_live_progress_is_visible_before_the_job_finishes(self):
+        tok = self.register("live@b.co")
+        ag, did = self.enroll(tok, "pc")
+        self.call("POST", "/api/jobs", {"device_ids": [did], "steps": [{"type": "install", "apps": ["git", "vlc", "teams"]}]}, tok)
+        job = ag.call("GET", "/api/agent/poll")["job"]
+        self.assertEqual([x["key"] for x in job["steps"]][:2], ["git", "vlc"])           # steps carry the catalog key
+        queued = self.call("GET", "/api/jobs", token=tok)[1][0]
+        self.assertEqual([x["status"] for x in queued["steps"]], ["queued", "queued", "queued"])
+
+        ag.progress(job["id"], [{"i": 0, "status": "done"}, {"i": 1, "status": "running"}], "=== [1/3] install Git\nSuccessfully installed\n=== [2/3] install VLC")
+        mid = self.call("GET", "/api/jobs", token=tok)[1][0]
+        self.assertEqual(mid["status"], "running")
+        self.assertEqual([x["status"] for x in mid["steps"]][:2], ["done", "running"])
+        self.assertIn("Successfully installed", mid["log"])                                # live log, not just the final one
+
+        ag.progress(job["id"], [{"i": 0, "status": "done"}, {"i": 1, "status": "failed", "hint": "Windows is already installing something else."}], "log2")
+        ag.call("POST", f"/api/agent/jobs/{job['id']}/result", {"status": "failed", "log": "final log"})
+        end = self.call("GET", "/api/jobs", token=tok)[1][0]
+        self.assertEqual((end["status"], end["log"]), ("failed", "final log"))
+        self.assertEqual(end["steps"][1]["hint"], "Windows is already installing something else.")
+        ag.progress(job["id"], [{"i": 0, "status": "running"}], "late")                    # ignored once the job is finished
+        self.assertEqual(self.call("GET", "/api/jobs", token=tok)[1][0]["log"], "final log")
+
+    def test_progress_endpoint_ignores_garbage_and_other_devices(self):
+        tok = self.register("garb@b.co")
+        a1, d1 = self.enroll(tok, "one")
+        a2, d2 = self.enroll(tok, "two")
+        self.call("POST", "/api/jobs", {"device_ids": [d1], "steps": [{"type": "install", "apps": ["git"]}]}, tok)
+        job = a1.call("GET", "/api/agent/poll")["job"]
+        a2.progress(job["id"], [{"i": 0, "status": "done"}], "not yours")                  # another device can't touch it
+        a1.progress(job["id"], [{"i": "x", "status": "done"}, {"i": 0, "status": "exploded"}, "junk"], "ok")
+        j = self.call("GET", "/api/jobs", token=tok)[1][0]
+        self.assertEqual((j["log"], j["steps"][0]["status"]), ("ok", "queued"))
+
+    def test_server_sent_events_wake_up_on_changes(self):
+        import http.client
+        import time as _t
+        tok = self.register("sse@b.co")
+        ag, did = self.enroll(tok, "pc")
+        host, port = self.base.replace("http://", "").split(":")
+        conn = http.client.HTTPConnection(host, int(port), timeout=6)
+        conn.request("GET", "/api/events", headers={"Authorization": "Bearer " + tok})
+        resp = conn.getresponse()
+        self.assertEqual((resp.status, resp.getheader("Content-Type")), (200, "text/event-stream"))
+        first = resp.fp.readline() + resp.fp.readline() + resp.fp.readline()               # retry:, blank, event: hello
+        self.assertIn(b"retry", first)
+        self.assertIn(b"hello", first)
+        resp.fp.readline()                                                                 # data: {}
+        resp.fp.readline()                                                                 # blank line ends the event
+
+        def next_event():
+            lines = []
+            while True:
+                line = resp.fp.readline()
+                if line.startswith(b"event:"):
+                    return line.strip()
+                lines.append(line)
+
+        t0 = _t.time()
+        threading.Timer(0.3, lambda: self.call("POST", "/api/jobs", {"device_ids": [did], "steps": [{"type": "install", "apps": ["git"]}]}, tok)).start()
+        self.assertEqual(next_event(), b"event: change")                                   # a user action wakes the stream
+        self.assertLess(_t.time() - t0, 3)
+        threading.Timer(0.3, lambda: ag.call("GET", "/api/agent/poll")).start()
+        self.assertEqual(next_event(), b"event: change")                                   # a device starting the job does too
+        conn.close()
+        other = self.register("sse2@b.co")
+        c2 = http.client.HTTPConnection(host, int(port), timeout=3)
+        c2.request("GET", "/api/events", headers={"Authorization": "Bearer nope"})
+        self.assertEqual(c2.getresponse().status, 401)
+
+
+    def test_long_poll_wakes_the_device_instantly_and_never_holds_the_write_lock(self):
+        import time as _t
+        tok = self.register("long@b.co")
+        ag, did = self.enroll(tok, "pc")
+        got = {}
+
+        def waiter():
+            t0 = _t.time()
+            got["job"] = ag.call("GET", "/api/agent/poll?wait=10")["job"]
+            got["dt"] = _t.time() - t0
+        th = threading.Thread(target=waiter)
+        th.start()
+        _t.sleep(0.5)
+        t0 = _t.time()
+        self.register("lock-probe@b.co")                                                  # a write while a device is waiting must not block
+        self.assertLess(_t.time() - t0, 2.0)
+        self.call("POST", "/api/jobs", {"device_ids": [did], "steps": [{"type": "install", "apps": ["git"]}]}, tok)
+        th.join(6)
+        self.assertIsNotNone(got.get("job"), got)
+        self.assertLess(got["dt"], 3.0)                                                   # delivered right away, not after the 10 s wait
+        self.assertEqual(self.call("GET", "/api/jobs", token=tok)[1][0]["status"], "running")
+
+        t0 = _t.time()
+        idle = ag.call("GET", "/api/agent/poll?wait=1")                                   # nothing to do: held for the wait, then empty
+        self.assertEqual((idle["job"], idle.get("long")), (None, True))
+        self.assertGreaterEqual(_t.time() - t0, 0.9)
+        quick = ag.call("GET", "/api/agent/poll")                                         # no wait param = old behaviour, answers at once
+        self.assertNotIn("long", quick)
 
     def test_info_is_not_lite(self):
         s, r = self.call("GET", "/api/info")

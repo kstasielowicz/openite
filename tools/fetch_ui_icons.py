@@ -31,6 +31,7 @@ ICONS = {
     "box": "package-check", "user": "user", "lock": "lock", "code": "code-xml", "home": "house", "cloud": "cloud",
     "wifi": "wifi", "uptime": "timer", "board": "circuit-board", "rocket": "rocket", "minus": "minus",
     "panel": "panel-right-open", "menu": "menu", "undo": "undo-2", "eye": "eye", "book": "book-open",
+    "help": "circle-help", "retry": "rotate-ccw", "arrow-right": "arrow-right", "bolt": "bolt", "shield-ok": "shield-check",
 }
 
 

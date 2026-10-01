@@ -296,7 +296,7 @@ func cmdChange(kind string, args []string) {
 }
 
 func stepFor(kind string, a catalog.App, pkg, version string) Step {
-	return Step{Type: kind, App: a.Name, Pkg: pkg, Version: version, Aliases: append([]string{a.Name}, a.Match...)}
+	return Step{Type: kind, Key: a.Key, App: a.Name, Pkg: pkg, Version: version, Aliases: append([]string{a.Name}, a.Match...)}
 }
 
 // runChange previews, asks, then runs each app as its own step so one failure doesn't stop the rest.
@@ -345,12 +345,19 @@ func runChange(kind string, apps []catalog.App, versions map[string]string, b Ba
 			label = "Updating everything"
 		}
 		var lines []string
-		ok := withSpinner(label, func() bool {
-			return executeJob(Job{Steps: []Step{s}}, b, func(l string) { lines = append(lines, l) }) == "done"
-		})
+		hint := ""
+		hk := jobHooks{Line: func(l string) { lines = append(lines, l) }, Step: func(_ int, st, h string) {
+			if st == "failed" {
+				hint = h
+			}
+		}}
+		ok := withSpinner(label, func() bool { return executeJob(Job{Steps: []Step{s}}, b, hk) == "done" })
 		if !ok {
 			fail++
 			fmt.Println(dim(indent(strings.Join(lines, "\n"), "      ")))
+			if hint != "" {
+				fmt.Printf("      %s %s\n", yellow("→"), hint)
+			}
 		} else if dryRun {
 			for _, l := range lines {
 				if strings.HasPrefix(l, "[dry-run]") {

@@ -25,6 +25,9 @@ Without a real terminal (scripts, pipes) it falls back to numbered lists.
 ## Names are forgiving
 `openite install "visual studio code"`, `vscode`, `vsc` all work when unambiguous; otherwise it lists the candidates. Preset names are accepted as `--preset gaming` or `preset:gaming`.
 
+## When something fails
+Each failed step comes with a short explanation and what to do next, instead of just an exit code. For example: *"The app's own installer failed (error 1603). Close the app if it is open, restart Windows and try again."* or *"This needs administrator rights. Start Openite with Run as administrator."* The same text appears in the web UI's Activity page. The hints match on the package manager's exit code and output (administrator rights, no internet, another install running, package not found, checksum mismatch, apt locks, passwordless sudo, timeouts, and more); they are advice, so the full output is always one click away.
+
 ## Exact versions and holds
 ```powershell
 openite versions git              # list installable versions, newest first

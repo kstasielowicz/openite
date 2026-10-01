@@ -25,16 +25,60 @@ import (
 // so web/index.html works unchanged. Loopback only, no accounts.
 
 type uiJob struct {
-	ID       int      `json:"id"`
-	DeviceID int      `json:"device_id"`
-	Title    string   `json:"title"`
-	Status   string   `json:"status"`
-	Log      string   `json:"log"`
-	Created  float64  `json:"created"`
-	Started  *float64 `json:"started"`
-	Finished *float64 `json:"finished"`
-	Source   string   `json:"source"`
+	ID       int        `json:"id"`
+	DeviceID int        `json:"device_id"`
+	Title    string     `json:"title"`
+	Status   string     `json:"status"`
+	Log      string     `json:"log"`
+	Created  float64    `json:"created"`
+	Started  *float64   `json:"started"`
+	Finished *float64   `json:"finished"`
+	Source   string     `json:"source"`
+	Steps    []stepView `json:"steps"` // live status of every step, for progress on app cards
 	steps    []Step
+}
+
+// stepView is what the UI sees of a step: enough to show "Installing Git" and why something failed.
+type stepView struct {
+	Key     string `json:"key"`
+	App     string `json:"app"`
+	Type    string `json:"type"`
+	Version string `json:"version,omitempty"`
+	Status  string `json:"status"` // queued | running | done | failed | skipped
+	Hint    string `json:"hint,omitempty"`
+}
+
+// hub fans "something changed" out to every open /api/events stream (server-sent events).
+type hub struct {
+	mu   sync.Mutex
+	subs map[chan struct{}]struct{}
+}
+
+func newHub() *hub { return &hub{subs: map[chan struct{}]struct{}{}} }
+
+func (h *hub) subscribe() chan struct{} {
+	ch := make(chan struct{}, 1)
+	h.mu.Lock()
+	h.subs[ch] = struct{}{}
+	h.mu.Unlock()
+	return ch
+}
+
+func (h *hub) unsubscribe(ch chan struct{}) {
+	h.mu.Lock()
+	delete(h.subs, ch)
+	h.mu.Unlock()
+}
+
+func (h *hub) notify() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for ch := range h.subs {
+		select {
+		case ch <- struct{}{}:
+		default: // already has a pending wake-up; the client will refetch once and see everything
+		}
+	}
 }
 
 type syncStep struct {
@@ -52,6 +96,7 @@ type localUI struct {
 	queue  chan *uiJob
 	hw     Hardware
 	advice []Advice
+	hub    *hub
 
 	// sync progress, shown as a loader in the UI and as a spinner label in the terminal
 	syncMu     sync.Mutex
@@ -72,6 +117,7 @@ func (u *localUI) syncStage(name string) {
 		u.syncSteps[i].Status = "done"
 	}
 	u.syncSteps = append(u.syncSteps, syncStep{name, "running"})
+	u.hub.notify()
 }
 
 func (u *localUI) currentStage() string {
@@ -92,6 +138,7 @@ func (u *localUI) sync() {
 	}
 	u.syncBusy, u.syncSteps = true, nil
 	u.syncMu.Unlock()
+	u.hub.notify()
 
 	inv := u.b.Inventory(u.syncStage)
 	u.syncStage("Reading system details")
@@ -111,6 +158,7 @@ func (u *localUI) sync() {
 	}
 	u.syncBusy, u.everSynced = false, true
 	u.syncMu.Unlock()
+	u.hub.notify()
 }
 
 func (u *localUI) worker() {
@@ -122,11 +170,31 @@ func (u *localUI) worker() {
 		}
 		j.Status, j.Started = "running", ptr(now())
 		u.mu.Unlock()
-		var lines []string
-		st := executeJob(Job{ID: j.ID, Title: j.Title, Steps: j.steps}, u.b, func(l string) { lines = append(lines, l) })
+		u.hub.notify()
+		hk := jobHooks{
+			Line: func(l string) {
+				u.mu.Lock()
+				if j.Log != "" {
+					j.Log += "\n"
+				}
+				j.Log += l
+				u.mu.Unlock()
+				u.hub.notify()
+			},
+			Step: func(i int, status, hint string) {
+				u.mu.Lock()
+				if i >= 0 && i < len(j.Steps) {
+					j.Steps[i].Status, j.Steps[i].Hint = status, hint
+				}
+				u.mu.Unlock()
+				u.hub.notify()
+			},
+		}
+		st := executeJob(Job{ID: j.ID, Title: j.Title, Steps: j.steps}, u.b, hk)
 		u.mu.Lock()
-		j.Status, j.Log, j.Finished = st, strings.Join(lines, "\n"), ptr(now())
+		j.Status, j.Finished = st, ptr(now())
 		u.mu.Unlock()
+		u.hub.notify()
 		u.sync()
 	}
 }
@@ -203,6 +271,34 @@ func (u *localUI) handler() http.Handler {
 		u.syncMu.Lock()
 		defer u.syncMu.Unlock()
 		writeJSON(w, 200, map[string]any{"ready": u.everSynced, "busy": u.syncBusy, "steps": u.syncSteps, "manager": u.b.Name()})
+	})
+	mux.HandleFunc("/api/events", func(w http.ResponseWriter, r *http.Request) {
+		fl, ok := w.(http.Flusher)
+		if !ok {
+			fail(w, 500, "streaming not supported")
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Accel-Buffering", "no")
+		ch := u.hub.subscribe()
+		defer u.hub.unsubscribe(ch)
+		fmt.Fprint(w, "retry: 2000\n\nevent: hello\ndata: {}\n\n")
+		fl.Flush()
+		beat := time.NewTicker(15 * time.Second)
+		defer beat.Stop()
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-ch:
+				fmt.Fprint(w, "event: change\ndata: {}\n\n")
+				fl.Flush()
+			case <-beat.C:
+				fmt.Fprint(w, ": keepalive\n\n")
+				fl.Flush()
+			}
+		}
 	})
 	mux.HandleFunc("/api/rescan", func(w http.ResponseWriter, r *http.Request) {
 		go u.sync()
@@ -341,9 +437,17 @@ func (u *localUI) handler() http.Handler {
 				}
 			}
 		}
-		j := &uiJob{ID: len(u.jobs) + 1, DeviceID: 1, Title: body.Title, Status: "queued", Created: now(), Source: "manual", steps: steps}
+		views := make([]stepView, len(steps))
+		for i, st := range steps {
+			views[i] = stepView{Key: st.Key, App: st.App, Type: st.Type, Version: st.Version, Status: "queued"}
+			if st.Type == "skip" {
+				views[i].Status, views[i].Hint = "skipped", st.Reason
+			}
+		}
+		j := &uiJob{ID: len(u.jobs) + 1, DeviceID: 1, Title: body.Title, Status: "queued", Created: now(), Source: "manual", steps: steps, Steps: views}
 		u.jobs = append(u.jobs, j)
 		u.queue <- j
+		defer u.hub.notify()
 		writeJSON(w, 200, map[string]any{"job_ids": []int{j.ID}})
 	})
 	mux.HandleFunc("/api/jobs/", func(w http.ResponseWriter, r *http.Request) {
@@ -411,7 +515,7 @@ func cmdUI(args []string) {
 	b := needBackend()
 	var tok [16]byte
 	rand.Read(tok[:])
-	u := &localUI{b: b, token: hex.EncodeToString(tok[:]), queue: make(chan *uiJob, 64)}
+	u := &localUI{b: b, token: hex.EncodeToString(tok[:]), queue: make(chan *uiJob, 64), hub: newHub()}
 	var ln net.Listener
 	var err error
 	for p := *port; p < *port+20; p++ {

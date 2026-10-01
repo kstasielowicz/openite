@@ -2,7 +2,7 @@
 
 Open-source Ninite-style software manager. Pick apps, press Install; keep one PC, a home lab or a whole fleet installed and up to date. It uses your OS's own package manager (winget / Homebrew / apt), so software always comes from official sources. MIT licensed, zero dependencies.
 
-**What you get:** 87 apps with icons · starter presets · exact versions and update holds · runtimes (.NET, Visual C++, DirectX, Java) · driver guidance · silent uninstall · automatic updates · hardware and health details for every machine · one static binary · optional multi-device server.
+**What you get:** 87 apps with icons · starter presets · exact versions and update holds · runtimes (.NET, Visual C++, DirectX, Java) · driver guidance · silent uninstall · automatic updates · hardware and health details for every machine · live progress with plain-language failure explanations · first-run guided setup · one static binary · optional multi-device server.
 
 ## Quick start (Windows)
 
@@ -25,6 +25,7 @@ Linux/macOS: `curl -fsSL https://raw.githubusercontent.com/kstasielowicz/openite
 
 | I want to… | Do this |
 |---|---|
+| First time | `openite` opens a short guided setup: pick what you use the PC for, review the apps, and watch them install live |
 | Click around | `openite` reads your PC (with a live progress display), then opens a web page: pick a starter pack or apps and press **Install**. The panel on the right always shows what you picked; the **This PC** page shows your hardware, health and updates. |
 | Choose in the terminal | `openite pick`: arrow keys, **Space** to tick, **Enter** to install |
 | One-liner install | `openite install firefox vlc vivaldi` or `openite install --preset developer` |

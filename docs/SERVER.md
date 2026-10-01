@@ -13,7 +13,8 @@ Server mode lets you manage **many devices from one web page**: your PCs, a home
    SQLite file
 ```
 - The **server** stores accounts, devices, tags, profiles, scripts, schedules, jobs and the audit log in one SQLite file.
-- The **agent** is the same `openite` binary you use on the command line, run as `openite run`. It checks in every ~15 s, runs the jobs it's given (install / update / uninstall / scripts) and reports the result plus what's installed.
+- The **agent** is the same `openite` binary you use on the command line, run as `openite run`. It keeps a request open to the server, so jobs start the moment you press the button (it falls back to polling every 15 s where long requests aren't allowed). It streams live output and per-step status while a job runs, and reports what's installed.
+- The **web page** gets changes pushed to it (server-sent events), so installs, device status and logs update live without refreshing.
 - Devices **pull** work. You never need inbound ports or remote-access tools on managed machines.
 
 ## 1. Start a server
@@ -47,6 +48,17 @@ openite.example.com {
 }
 ```
 Then enroll agents with `--server https://openite.example.com`.
+
+Live updates and instant job start use long-lived HTTP requests, so a reverse proxy must **not buffer or time out** them. Caddy works as-is. For nginx:
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_buffering off;          # server-sent events must not be buffered
+    proxy_read_timeout 70s;       # longer than the 25 s agent long-poll and the 15 s event keep-alive
+}
+```
+If a proxy blocks long requests, nothing breaks: agents fall back to polling and the page to a 5 s refresh.
 
 ## 2. Add devices
 
@@ -129,6 +141,7 @@ There is no federation or cross-server dashboard yet. If you need one view over 
 | Device never appears | Wrong `--server` URL or firewall; the code expired (15 min) or was already used. Generate a new one. |
 | Device shows offline | Its agent isn't running. Start `openite run` or the service; check `openite install-service` ran elevated. |
 | `refusing plain http://` on enroll | You pointed at a public address without TLS. Use `https://` (recommended) or `--allow-insecure`. |
+| Page doesn't update live (header dot is grey) | A proxy is buffering or cutting long requests. See the nginx settings above. The page still refreshes every few seconds. |
 | Job stays "waiting" | The device is off or its agent stopped; it runs when the agent returns. Cancel it in Activity if you no longer want it. |
 | Rollout shows "not started" | The canary group failed and the rollout halted on purpose. Read the failed job log, fix, re-run. |
 | Installs fail with access denied | The agent isn't elevated. On Windows install the service from an Administrator terminal. |
