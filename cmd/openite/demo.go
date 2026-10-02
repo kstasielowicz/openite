@@ -98,6 +98,12 @@ func (d *demoBackend) Inventory(progress func(string)) catalog.Inventory {
 		inv.Installed[k] = v
 	}
 	inv.Names["Vivaldi"] = "8.2.4133.80"
+	// a few packages outside the catalog, so "All installed software" has something to show
+	for id, v := range map[string][2]string{"Microsoft.Edge": {"Microsoft Edge", "129.0.2792.65"}, "Microsoft.OneDrive": {"Microsoft OneDrive", "24.180.0905"},
+		"Logitech.OptionsPlus": {"Logi Options+", "1.80.1"}, "Microsoft.AppInstaller": {"App Installer", "1.23.1911"}} {
+		inv.Installed[id], inv.Labels[id] = v[1], v[0]
+	}
+	inv.Upgradable["Logitech.OptionsPlus"] = "1.82.6"
 	inv.Upgradable["VideoLAN.VLC"] = "3.0.21"
 	inv.Upgradable["Mozilla.Firefox"] = "129.0"
 	for k := range d.pinned {

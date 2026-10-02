@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -103,6 +104,7 @@ type localUI struct {
 	syncSteps  []syncStep
 	syncBusy   bool
 	everSynced bool
+	syncedAt   float64
 }
 
 func now() float64 { return float64(time.Now().UnixNano()) / 1e9 }
@@ -149,7 +151,7 @@ func (u *localUI) sync() {
 	hw := Hardware{GPUs: sys.GPUs, Maker: sys.Maker, Model: sys.Model, CPU: sys.CPU}
 
 	u.mu.Lock()
-	u.inv, u.sys, u.hw, u.advice = inv, sys, hw, driverAdvice(hw)
+	u.inv, u.sys, u.hw, u.advice, u.syncedAt = inv, sys, hw, driverAdvice(hw), now()
 	u.mu.Unlock()
 
 	u.syncMu.Lock()
@@ -239,6 +241,27 @@ func (u *localUI) device() map[string]any {
 			held = append(held, a.Key)
 		}
 	}
+	// every package the manager reports, catalog or not, so the UI can show the whole machine
+	owner := map[string]string{}
+	for _, a := range catalog.Apps() {
+		if p := a.Pkg(u.b.Name()); p != "" {
+			owner[strings.ToLower(p)] = a.Key
+		}
+	}
+	pkgs := []map[string]any{}
+	for id, v := range u.inv.Installed {
+		key := owner[strings.ToLower(id)]
+		name := u.inv.Labels[id]
+		if a, ok := catalog.Find(key); name == "" && ok {
+			name = a.Name
+		}
+		if name == "" {
+			name = id
+		}
+		_, held := u.inv.Pinned[id]
+		pkgs = append(pkgs, map[string]any{"id": id, "name": name, "version": v, "available": u.inv.Upgradable[id], "held": held, "key": key})
+	}
+	sort.Slice(pkgs, func(i, j int) bool { return strings.ToLower(pkgs[i]["name"].(string)) < strings.ToLower(pkgs[j]["name"].(string)) })
 	sys := u.sys
 	if sys.BootUnix > 0 {
 		sys.UptimeSec = time.Now().Unix() - sys.BootUnix
@@ -246,7 +269,7 @@ func (u *localUI) device() map[string]any {
 	host, _ := os.Hostname()
 	return map[string]any{"id": 1, "name": host + " (this PC)", "os": osName(), "manager": u.b.Name(), "tags": []string{},
 		"last_seen": now(), "online": true, "have": have, "outdated": outdated, "held": held, "versions": versions,
-		"available": available, "n_installed": len(u.inv.Installed), "n_upgradable": len(u.inv.Upgradable),
+		"available": available, "packages": pkgs, "synced_at": u.syncedAt, "n_installed": len(u.inv.Installed), "n_upgradable": len(u.inv.Upgradable),
 		"managed": false, "missing": []string{}, "sysinfo": sys, "agent_version": version, "notes": "", "settings": map[string]any{}}
 }
 
@@ -258,7 +281,8 @@ func (u *localUI) handler() http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'")
+		w.Header().Set("Cache-Control", "no-cache") // a new openite version must never show yesterday's page
 		w.Write(web.Index)
 	})
 	mux.HandleFunc("/api/info", func(w http.ResponseWriter, r *http.Request) {
@@ -420,6 +444,19 @@ func (u *localUI) handler() http.Handler {
 			}
 			keys, _ := s.Apps.([]any)
 			for _, k := range keys {
+				// "pkg:<id>" targets a package outside the catalog; only ones this machine reports, and never for install
+				if id, isPkg := strings.CutPrefix(fmt.Sprint(k), "pkg:"); isPkg {
+					if _, have := u.inv.Installed[id]; !have || s.Type == "install" || !catalog.SafeID.MatchString(id) {
+						fail(w, 400, fmt.Sprintf("unknown package: %s", id))
+						return
+					}
+					name := u.inv.Labels[id]
+					if name == "" {
+						name = id
+					}
+					steps = append(steps, Step{Type: s.Type, Key: "pkg:" + id, App: name, Pkg: id, Aliases: []string{name}})
+					continue
+				}
 				a, ok := catalog.Find(fmt.Sprint(k))
 				if !ok {
 					fail(w, 400, fmt.Sprintf("unknown app: %v", k))

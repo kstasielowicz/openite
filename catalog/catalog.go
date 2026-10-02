@@ -37,6 +37,7 @@ type Inventory struct {
 	UpgradableNames map[string]string
 	Pinned          map[string]string // held package id -> version (bulk updates skip these)
 	PinnedNames     map[string]string
+	Labels          map[string]string // package id -> display name, when the manager reports one
 }
 
 // SafeVersion is the only shape of version string we will pass to a package manager.

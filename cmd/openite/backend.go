@@ -87,7 +87,7 @@ func stage(progress func(string), name string) {
 
 func newInventory() catalog.Inventory {
 	return catalog.Inventory{Installed: map[string]string{}, Upgradable: map[string]string{}, Names: map[string]string{},
-		UpgradableNames: map[string]string{}, Pinned: map[string]string{}, PinnedNames: map[string]string{}}
+		UpgradableNames: map[string]string{}, Pinned: map[string]string{}, PinnedNames: map[string]string{}, Labels: map[string]string{}}
 }
 
 func cat(parts ...[]string) []string {
@@ -148,6 +148,9 @@ func (winget) Inventory(progress func(string)) catalog.Inventory {
 	for _, r := range parseTable(out) {
 		if r["Id"] != "" {
 			inv.Installed[r["Id"]] = r["Version"]
+			if r["Name"] != "" {
+				inv.Labels[r["Id"]] = r["Name"]
+			}
 		}
 		if r["Name"] != "" { // apps installed outside winget show up as "ARP\..." ids; the display name is what identifies them
 			inv.Names[r["Name"]] = r["Version"]
@@ -158,6 +161,9 @@ func (winget) Inventory(progress func(string)) catalog.Inventory {
 	for _, r := range parseTable(out) {
 		if r["Id"] != "" {
 			inv.Upgradable[r["Id"]] = r["Available"]
+			if r["Name"] != "" && inv.Labels[r["Id"]] == "" {
+				inv.Labels[r["Id"]] = r["Name"]
+			}
 		}
 		if r["Name"] != "" {
 			inv.UpgradableNames[r["Name"]] = r["Available"]
