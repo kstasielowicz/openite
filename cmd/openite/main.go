@@ -27,7 +27,7 @@ var longPolled atomic.Bool
 // pollInterval is the server-provided seconds between polls (0 = use the --interval flag).
 var pollInterval atomic.Int64
 
-var version = "0.7.0" // overridden at release time: -ldflags "-X main.version=..."
+var version = "0.7.1" // overridden at release time: -ldflags "-X main.version=..."
 
 type Config struct {
 	Server   string `json:"server"`
