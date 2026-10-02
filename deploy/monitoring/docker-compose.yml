@@ -1,0 +1,28 @@
+# Prometheus + Grafana for an Openite server, with the Openite dashboard preinstalled.
+#
+#   1. In Openite: Settings > Monitoring > Create metrics token. Put it in ./openite-token (one line, no quotes).
+#   2. If Openite does not run on this same host at port 8080, change the target in prometheus.yml.
+#   3. docker compose up -d     then open http://<host>:3000  (admin / admin on first login; change it)
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./openite-token:/etc/prometheus/openite-token:ro
+      - prometheus-data:/prometheus
+    extra_hosts: ["host.docker.internal:host-gateway"]  # reach an Openite server published on this host
+    ports: ["9090:9090"]
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["3000:3000"]
+volumes:
+  prometheus-data:
+  grafana-data:

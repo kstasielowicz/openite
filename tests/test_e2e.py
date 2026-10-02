@@ -427,5 +427,68 @@ class E2E(unittest.TestCase):
         self.assertEqual(self.call("GET", "/api/home")[0], 404)  # no auto-login on the multi-user server
 
 
+    def test_setup_actions_in_jobs_and_profiles(self):
+        tok = self.register("setup@b.co")
+        a, d = self.enroll(tok, "win-1")
+        a.call("POST", "/api/agent/checkin", {"os": "windows", "manager": "winget"})
+        _, items = self.call("GET", "/api/setup", token=tok)
+        self.assertIn("wu-kb", [i["id"] for i in items])
+        self.assertNotIn("ps", items[0])  # scripts never leave the agent binary
+        bad = [{"id": "nope"}, {"id": "wu-kb"}, {"id": "wu-kb", "args": ["KB1; rm"]}]
+        for b in bad:
+            self.assertEqual(self.call("POST", "/api/jobs", {"device_ids": [d], "steps": [{"type": "setup", "items": [b]}]}, tok)[0], 400, b)
+        _, pr = self.call("POST", "/api/profiles", {"name": "base", "apps": ["git"], "description": "office PCs",
+                                                  "setup": [{"id": "show-extensions"}, {"id": "wu-kb", "args": ["5066835"]}, {"id": "restore-point"}]}, tok)
+        _, profiles = self.call("GET", "/api/profiles", token=tok)
+        p = [x for x in profiles if x["id"] == pr["id"]][0]
+        self.assertEqual(p["setup"][1], {"id": "wu-kb", "args": ["KB5066835"]})
+        self.assertEqual(p["description"], "office PCs")
+        self.call("POST", "/api/jobs", {"device_ids": [d], "steps": [{"type": "profile", "profile_id": pr["id"]}]}, tok)
+        job = a.process_once()
+        self.assertEqual([(st["type"], st.get("key")) for st in job["steps"]],
+                         [("setup", "restore-point"), ("install", "git"), ("setup", "show-extensions"), ("setup", "wu-kb")])
+        self.assertEqual(job["steps"][3]["args"], ["KB5066835"])
+
+    def test_device_record_monitor_events_metrics(self):
+        tok = self.register("rec@b.co")
+        a, d = self.enroll(tok, "nas-1")
+        a.checkin(sysinfo={"os": "Microsoft Windows 11 Pro", "os_version": "10.0.26200.9457 (25H2)", "disk_free_gb": 40, "disk_total_gb": 400,
+                           "win_updates": [{"title": "x", "kb": "KB5066835", "security": True, "size_mb": 1}]})
+        meta = {"role": "File server", "site": "Home", "status": "active", "asset_tag": "A-001", "custom": [{"key": "Rack", "value": "R1"}, {"key": "", "value": "dropped"}]}
+        self.assertEqual(self.call("PUT", f"/api/devices/{d}", {"meta": meta}, tok)[0], 200)
+        self.assertEqual(self.call("PUT", f"/api/devices/{d}", {"meta": {"status": "exploded"}}, tok)[0], 400)
+        dev = [x for x in self.call("GET", "/api/devices", token=tok)[1] if x["id"] == d][0]
+        self.assertEqual(dev["meta"]["custom"], [{"key": "Rack", "value": "R1"}])
+        self.assertEqual(dev["meta"]["role"], "File server")
+
+        _, mon = self.call("GET", "/api/monitor?range=24h", token=tok)
+        row = [x for x in mon["devices"] if x["id"] == d][0]
+        self.assertEqual(len(row["cols"]), 24)
+        self.assertEqual(row["cols"][-1], 1.0)  # checked in during the current hour
+        self.assertGreater(row["uptime_pct"], 0)
+
+        _, evs = self.call("GET", "/api/event-log", token=tok)
+        self.assertIn("device.enrolled", [e["kind"] for e in evs])
+        self.call("POST", "/api/jobs", {"device_ids": [d], "steps": [{"type": "install", "apps": ["git"]}], "title": "Install Git"}, tok)
+        a.fail = True
+        a.process_once()
+        _, evs = self.call("GET", "/api/event-log?level=error", token=tok)
+        self.assertEqual(evs[0]["message"], "Install Git failed on nas-1")
+
+        req = urllib.request.Request(self.base + "/metrics")
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req)
+        self.assertEqual(e.exception.code, 401)
+        db = server.connect()
+        server.set_setting(db, "metrics_token_hash", server.hashlib.sha256(b"om_test").hexdigest())
+        db.commit()
+        db.close()
+        req.add_header("Authorization", "Bearer om_test")
+        text = urllib.request.urlopen(req).read().decode()
+        self.assertIn('openite_device_up{device="nas-1"', text)
+        self.assertIn('site="Home",role="File server"} 1', text)
+        self.assertRegex(text, r'openite_device_windows_updates_pending\{device="nas-1"[^}]*\} 1')
+
+
 if __name__ == "__main__":
     unittest.main()

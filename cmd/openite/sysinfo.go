@@ -13,7 +13,7 @@ import (
 )
 
 // SysInfo is what a device tells the UI about itself: enough to recognise a machine and judge its health,
-// nothing sensitive (no serial numbers, no user names beyond the account running the agent, no file contents).
+// plus the serial number for asset records. Nothing sensitive: no user names beyond the account running the agent, no file contents.
 type SysInfo struct {
 	Hostname   string   `json:"hostname"`
 	OS         string   `json:"os"`
@@ -37,6 +37,14 @@ type SysInfo struct {
 	Timezone   string   `json:"timezone"`
 	User       string   `json:"user"`
 	Elevated   bool     `json:"elevated"`
+	// Windows only: full build with patch level (10.0.26200.9457), feature release (25H2), serial and patch state
+	Build      string      `json:"build,omitempty"`
+	Release    string      `json:"release,omitempty"`
+	Edition    string      `json:"edition,omitempty"`
+	Serial     string      `json:"serial,omitempty"`
+	LastPatch  string      `json:"last_patch,omitempty"` // newest installed update, e.g. "KB5066835 (2026-09-10)"
+	WinUpdates []WinUpdate `json:"win_updates,omitempty"`
+	WUScanned  int64       `json:"wu_scanned,omitempty"` // unix time of the last Windows Update scan, 0 = never
 }
 
 type flexStrings []string
@@ -73,7 +81,7 @@ func currentSysInfo() SysInfo {
 	if s.BootUnix > 0 {
 		s.UptimeSec = time.Now().Unix() - s.BootUnix
 	}
-	return s
+	return withWindowsUpdates(s)
 }
 
 const psSysInfo = `$os=Get-CimInstance Win32_OperatingSystem;$cs=Get-CimInstance Win32_ComputerSystem;$cpu=@(Get-CimInstance Win32_Processor);` +
@@ -82,7 +90,14 @@ const psSysInfo = `$os=Get-CimInstance Win32_OperatingSystem;$cs=Get-CimInstance
 	`boot=[DateTimeOffset]::new($os.LastBootUpTime).ToUnixTimeSeconds();maker=$cs.Manufacturer;model=$cs.Model;cpu=$cpu[0].Name;` +
 	`cores=($cpu|Measure-Object NumberOfCores -Sum).Sum;threads=($cpu|Measure-Object NumberOfLogicalProcessors -Sum).Sum;` +
 	`diskTotal=$d.Size;diskFree=$d.FreeSpace;gpus=@(Get-CimInstance Win32_VideoController|ForEach-Object{$_.Name});tz=(Get-TimeZone).Id;` +
+	`serial=(Get-CimInstance Win32_BIOS).SerialNumber;` +
+	`ubr=(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').UBR;` +
+	`rel=(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').DisplayVersion;` +
+	`edition=(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').EditionID;` +
+	`patch=(Get-HotFix|Where-Object InstalledOn|Sort-Object InstalledOn -Descending|Select-Object -First 1|ForEach-Object{$_.HotFixID+' ('+$_.InstalledOn.ToString('yyyy-MM-dd')+')'});` +
 	`elev=([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)}|ConvertTo-Json -Compress`
+
+var junkSerial = regexp.MustCompile(`(?i)^(to be filled.*|default string|system serial number|none|n/a|0+|\.+)$`)
 
 var vmHints = []string{"virtual", "vmware", "kvm", "qemu", "hvm domu", "xen", "bochs", "parallels", "amazon ec2", "google compute", "openstack"}
 
@@ -127,6 +142,8 @@ func collectSysInfo() SysInfo {
 		_, out := probe([]string{"powershell", "-NoProfile", "-NonInteractive", "-Command", psSysInfo}, nil, time.Minute)
 		var w struct {
 			OS, OSVer, Build, Maker, Model, CPU, TZ string
+			Serial, Rel, Edition, Patch             string
+			UBR                                     int64
 			MemKB, FreeKB, Boot, Cores, Threads     int64
 			DiskTotal, DiskFree                     int64
 			GPUs                                    flexStrings `json:"gpus"`
@@ -134,6 +151,17 @@ func collectSysInfo() SysInfo {
 		}
 		if json.Unmarshal([]byte(out), &w) == nil {
 			s.OS, s.OSVersion = strings.TrimSpace(w.OS), w.OSVer+" (build "+w.Build+")"
+			s.Build, s.Release, s.Edition, s.LastPatch = w.OSVer, w.Rel, w.Edition, w.Patch
+			if w.UBR > 0 { // the patch level: 10.0.26200 -> 10.0.26200.9457
+				s.Build = w.OSVer + "." + strconv.FormatInt(w.UBR, 10)
+				s.OSVersion = s.Build
+				if w.Rel != "" {
+					s.OSVersion += " (" + w.Rel + ")"
+				}
+			}
+			if sn := strings.TrimSpace(w.Serial); sn != "" && !junkSerial.MatchString(sn) {
+				s.Serial = sn
+			}
 			s.Maker, s.Model, s.CPU, s.Timezone = strings.TrimSpace(w.Maker), strings.TrimSpace(w.Model), strings.TrimSpace(w.CPU), w.TZ
 			s.MemTotalMB, s.MemFreeMB = w.MemKB/1024, w.FreeKB/1024
 			s.DiskTotal, s.DiskFree = w.DiskTotal>>30, w.DiskFree>>30

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed catalog.json packs.json
+//go:embed catalog.json packs.json setup.json
 var files embed.FS
 
 type App struct {
@@ -58,6 +58,35 @@ func mustLoad(name string, v any) {
 
 func Apps() []App   { var a []App; mustLoad("catalog.json", &a); return a }
 func Packs() []Pack { var p []Pack; mustLoad("packs.json", &p); return p }
+
+// Setup is a built-in Windows setup action: a tweak, an optional feature or a Windows Update run.
+// The PowerShell lives here, in the signed binary; servers and UIs only ever send the id (plus validated KB numbers).
+type Setup struct {
+	ID          string   `json:"id"`
+	Kind        string   `json:"kind"` // tweak | feature | update
+	Group       string   `json:"group"`
+	Name        string   `json:"name"`
+	Desc        string   `json:"desc"`
+	Reboot      string   `json:"reboot,omitempty"` // "", "maybe" or "yes"
+	Admin       bool     `json:"admin,omitempty"`
+	Recommended bool     `json:"recommended,omitempty"`
+	Arg         string   `json:"arg,omitempty"` // "kb" when the action takes KB numbers
+	PS          []string `json:"ps"`
+}
+
+func SetupItems() []Setup { var s []Setup; mustLoad("setup.json", &s); return s }
+
+func FindSetup(id string) (Setup, bool) {
+	for _, s := range SetupItems() {
+		if s.ID == id {
+			return s, true
+		}
+	}
+	return Setup{}, false
+}
+
+// SafeKB is the only shape of KB number passed to Windows Update.
+var SafeKB = regexp.MustCompile(`^KB\d{6,8}$`)
 
 func Find(key string) (App, bool) {
 	for _, a := range Apps() {

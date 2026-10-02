@@ -17,6 +17,8 @@ import sqlite3
 import threading
 import time
 import datetime
+import logging
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -24,9 +26,15 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent  # catalog/ and web/ live at the repo root, shared with the Go binary
 BUILTIN_CATALOG = json.loads((ROOT / "catalog" / "catalog.json").read_text("utf-8"))
 PACKS = json.loads((ROOT / "catalog" / "packs.json").read_text("utf-8"))
+# built-in Windows setup actions; the PowerShell runs from the agent's own copy, only ids and KB numbers are sent
+SETUP = {it["id"]: {k: v for k, v in it.items() if k != "ps"} for it in json.loads((ROOT / "catalog" / "setup.json").read_text("utf-8"))}
+SAFE_KB = re.compile(r"^KB\d{6,8}$")
+DEVICE_STATUSES = ("active", "planned", "staged", "maintenance", "decommissioning", "retired")
+META_FIELDS = ("role", "site", "location", "owner", "asset_tag", "status", "purchased", "warranty_until", "description")
+PRESENCE_BUCKET = 300  # reachability is recorded in 5-minute slots
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+@/-]{0,127}$")
 SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+~:-]{0,63}$")
-VERSION = "0.7.1"
+VERSION = "0.8.0"
 MANAGERS = ("winget", "brew", "apt")
 SESSION_TTL = 30 * 86400
 ENROLL_TTL = 15 * 60
@@ -34,6 +42,37 @@ ONLINE_WINDOW = 90
 RECONCILE_COOLDOWN = 6 * 3600
 MAX_BODY = 1_000_000
 STATE = {"db": str(HERE / "openite.db"), "allow_registration": True}
+
+class _JsonFormatter(logging.Formatter):
+    def format(self, r):
+        out = {"ts": datetime.datetime.fromtimestamp(r.created).isoformat(timespec="seconds"), "level": r.levelname.lower(), "msg": r.getMessage()}
+        out.update(getattr(r, "fields", {}))
+        return json.dumps(out)
+
+
+def setup_logging():
+    """Console logs for admins: OPENITE_LOG_LEVEL=debug|info|warning, OPENITE_LOG_FORMAT=text|json (json suits Loki/ELK)."""
+    h = logging.StreamHandler(sys.stdout)
+    if os.environ.get("OPENITE_LOG_FORMAT", "text").lower() == "json":
+        h.setFormatter(_JsonFormatter())
+    else:
+        h.setFormatter(logging.Formatter("%(asctime)s %(levelname)-7s %(message)s", "%Y-%m-%d %H:%M:%S"))
+    LOG.handlers[:] = [h]
+    LOG.setLevel(os.environ.get("OPENITE_LOG_LEVEL", "info").upper())
+    LOG.propagate = False
+
+
+LOG = logging.getLogger("openite")
+
+
+def log(level, msg, **fields):
+    """One line per event with key=value context: easy to read in `docker logs`, and real fields in JSON mode."""
+    if not LOG.isEnabledFor(level):
+        return
+    as_json = bool(LOG.handlers) and isinstance(LOG.handlers[0].formatter, _JsonFormatter)
+    if fields and not as_json:
+        msg += "  " + " ".join(f"{k}={json.dumps(v) if isinstance(v, str) and (' ' in v or not v) else v}" for k, v in fields.items())
+    LOG.log(level, msg, extra={"fields": fields})
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts(id INTEGER PRIMARY KEY, email TEXT UNIQUE NOT NULL, salt BLOB NOT NULL, pw BLOB NOT NULL, created REAL);
@@ -52,6 +91,9 @@ CREATE TABLE IF NOT EXISTS schedules(id INTEGER PRIMARY KEY, account_id INTEGER 
   days TEXT DEFAULT '[]', rollout INTEGER DEFAULT 1, last_run TEXT);
 CREATE TABLE IF NOT EXISTS server_settings(key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, account_id INTEGER, ts REAL, actor TEXT, action TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS presence(device_id INTEGER NOT NULL, slot INTEGER NOT NULL, PRIMARY KEY(device_id, slot));
+CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, account_id INTEGER, ts REAL, level TEXT, kind TEXT, device_id INTEGER, message TEXT);
+CREATE INDEX IF NOT EXISTS events_by_account ON events(account_id, id);
 """
 # columns added after the first release: (table, column, definition)
 MIGRATIONS = [
@@ -66,6 +108,10 @@ MIGRATIONS = [
     ("jobs", "batch", "INTEGER DEFAULT 0"),
     ("jobs", "rollout_max_fail", "INTEGER DEFAULT 20"),
     ("jobs", "progress", "TEXT DEFAULT '[]'"),
+    ("profiles", "setup", "TEXT DEFAULT '[]'"),
+    ("profiles", "description", "TEXT DEFAULT ''"),
+    ("devices", "meta", "TEXT DEFAULT '{}'"),
+    ("devices", "was_online", "INTEGER DEFAULT 0"),
 ]
 
 
@@ -158,6 +204,20 @@ def clean_tags(tags):
 def audit(db, account, actor, action, detail=""):
     db.execute("INSERT INTO audit(account_id,ts,actor,action,detail) VALUES(?,?,?,?,?)",
                (account, time.time(), actor, action, detail))
+
+
+def event(db, account, level, kind, message, device_id=None):
+    """A fleet event for the Events page and the console log: devices coming and going, jobs finishing, enrolments."""
+    db.execute("INSERT INTO events(account_id,ts,level,kind,device_id,message) VALUES(?,?,?,?,?,?)",
+               (account, time.time(), level, kind, device_id, message))
+    log({"error": logging.ERROR, "warning": logging.WARNING}.get(level, logging.INFO), message, kind=kind, account=account,
+        **({"device": device_id} if device_id else {}))
+
+
+def mark_seen(db, device_id):
+    now = time.time()
+    db.execute("UPDATE devices SET last_seen=? WHERE id=?", (now, device_id))
+    db.execute("INSERT OR IGNORE INTO presence VALUES(?,?)", (device_id, int(now // PRESENCE_BUCKET)))
 
 
 def is_online(dev):
@@ -381,6 +441,23 @@ def resolve_step(step, device, catalog, scripts, profiles):
                 out.append(entry)
             else:
                 out.append({"type": "skip", "key": k, "app": app["name"], "reason": f"no {mgr or 'package manager'} package id"})
+    elif kind == "setup":
+        for pick in step.get("items") or []:
+            if not isinstance(pick, dict) or pick.get("id") not in SETUP:
+                raise ApiError(400, f"unknown setup action: {pick.get('id') if isinstance(pick, dict) else pick}")
+            it, args = SETUP[pick["id"]], []
+            for a in pick.get("args") or []:
+                a = str(a).strip().upper()
+                a = a if a.startswith("KB") else "KB" + a
+                if not SAFE_KB.match(a):
+                    raise ApiError(400, f"'{a}' is not a KB number like KB5066835")
+                args.append(a)
+            if it.get("arg") == "kb" and not args:
+                raise ApiError(400, f"{it['name']} needs at least one KB number")
+            if not ((device["os"] or "").lower().startswith("windows") or mgr == "winget"):
+                out.append({"type": "skip", "key": it["id"], "app": it["name"], "reason": "Windows only"})
+                continue
+            out.append({"type": "setup", "key": it["id"], "app": it["name"] + (f" ({', '.join(args)})" if args else ""), "args": args})
     elif kind == "script":
         s = scripts.get(step.get("script_id"))
         if not s:
@@ -391,9 +468,15 @@ def resolve_step(step, device, catalog, scripts, profiles):
         if not p:
             raise ApiError(400, "unknown profile")
         entries = norm_apps(json.loads(p["apps"]))
+        setup = json.loads(p["setup"] or "[]") if "setup" in p.keys() else []
+        if [x for x in setup if x.get("id") == "restore-point"]:  # a restore point only helps if it comes first
+            out += resolve_step({"type": "setup", "items": [x for x in setup if x.get("id") == "restore-point"]}, device, catalog, scripts, profiles)
         if entries:
             out += resolve_step({"type": "install", "apps": [e["key"] for e in entries],
                                  "versions": {e["key"]: e["version"] for e in entries if e["version"]}}, device, catalog, scripts, profiles)
+        rest = [x for x in setup if x.get("id") != "restore-point"]
+        if rest:
+            out += resolve_step({"type": "setup", "items": rest}, device, catalog, scripts, profiles)
         for sid in json.loads(p["script_ids"]):
             if sid in scripts:
                 out += resolve_step({"type": "script", "script_id": sid}, device, catalog, scripts, profiles)
@@ -434,7 +517,7 @@ def h_register(ctx, body):
     return {"token": new_session(ctx.db, cur.lastrowid), "email": email}
 
 
-def h_login(ctx, body):
+def h_login(ctx, body):  # noqa: C901
     email, pw = need(body, "email", "password")
     row = ctx.db.execute("SELECT * FROM accounts WHERE email=?", (email.strip().lower(),)).fetchone()
     salt = row["salt"] if row else b"\0" * 16
@@ -522,7 +605,8 @@ def device_view(r, assigns, catalog):
             "have": have, "outdated": outdated, "held": held, "versions": versions, "available": available,
             "n_installed": len(inv.get("installed", {})), "n_upgradable": len(inv.get("upgradable", {})),
             "managed": bool(want), "missing": missing, "sysinfo": json.loads(r["sysinfo"] or "{}"),
-            "notes": r["notes"] or "", "settings": json.loads(r["settings"] or "{}")}
+            "notes": r["notes"] or "", "settings": json.loads(r["settings"] or "{}"), "meta": json.loads(r["meta"] or "{}"),
+            "created": r["created"]}
 
 
 def h_devices(ctx, body):
@@ -548,6 +632,20 @@ def h_update_device(ctx, body, did):
             settings["maintenance"] = {"start": w["start"], "end": w["end"]}
         ctx.db.execute("UPDATE devices SET settings=? WHERE id=? AND account_id=?", (json.dumps(settings), did, ctx.account))
         audit(ctx.db, ctx.account, ctx.actor, "device.settings", f"{did}: {settings or 'cleared'}")
+    if "meta" in body:
+        raw = body["meta"] if isinstance(body["meta"], dict) else {}
+        meta = {k: str(raw.get(k) or "").strip()[:200] for k in META_FIELDS if str(raw.get(k) or "").strip()}
+        if meta.get("status") and meta["status"] not in DEVICE_STATUSES:
+            raise ApiError(400, "status must be one of " + ", ".join(DEVICE_STATUSES))
+        custom = []
+        for c in (raw.get("custom") or [])[:40]:
+            k, v = str((c or {}).get("key") or "").strip()[:60], str((c or {}).get("value") or "").strip()[:500]
+            if k:
+                custom.append({"key": k, "value": v})
+        if custom:
+            meta["custom"] = custom
+        ctx.db.execute("UPDATE devices SET meta=? WHERE id=? AND account_id=?", (json.dumps(meta), did, ctx.account))
+        audit(ctx.db, ctx.account, ctx.actor, "device.record", f"{did}: {', '.join(sorted(meta)) or 'cleared'}")
     if "tags" in body:
         ctx.db.execute("UPDATE devices SET tags=? WHERE id=? AND account_id=?",
                        (json.dumps(clean_tags(body["tags"])), did, ctx.account))
@@ -559,7 +657,10 @@ def h_update_device(ctx, body, did):
 
 
 def h_del_device(ctx, body, did):
+    if not ctx.db.execute("SELECT 1 FROM devices WHERE id=? AND account_id=?", (did, ctx.account)).fetchone():
+        raise ApiError(404, "device not found")
     ctx.db.execute("DELETE FROM jobs WHERE device_id=? AND account_id=?", (did, ctx.account))
+    ctx.db.execute("DELETE FROM presence WHERE device_id=?", (did,))
     ctx.db.execute("DELETE FROM devices WHERE id=? AND account_id=?", (did, ctx.account))
     audit(ctx.db, ctx.account, ctx.actor, "device.remove", str(did))
     return {}
@@ -599,16 +700,43 @@ def h_del_script(ctx, body, sid):
     return {}
 
 
+def norm_setup(items):
+    """[{id, args?}] with known ids and valid KB numbers only."""
+    out = []
+    for it in items or []:
+        if isinstance(it, str):
+            it = {"id": it}
+        if not isinstance(it, dict) or it.get("id") not in SETUP:
+            raise ApiError(400, f"unknown setup action: {it}")
+        args = [str(a).strip().upper() for a in it.get("args") or []]
+        args = [a if a.startswith("KB") else "KB" + a for a in args]
+        bad = [a for a in args if not SAFE_KB.match(a)]
+        if bad:
+            raise ApiError(400, f"'{bad[0]}' is not a KB number like KB5066835")
+        if SETUP[it["id"]].get("arg") == "kb" and not args:
+            raise ApiError(400, f"{SETUP[it['id']]['name']} needs at least one KB number")
+        out.append({"id": it["id"], **({"args": args} if args else {})})
+    return out
+
+
+def profile_view(r):
+    return {"id": r["id"], "name": r["name"], "description": r["description"] or "", "apps": norm_apps(json.loads(r["apps"])),
+            "script_ids": json.loads(r["script_ids"]), "setup": json.loads(r["setup"] or "[]")}
+
+
 def h_list_profiles(ctx, body):
-    return [{"id": r["id"], "name": r["name"], "apps": norm_apps(json.loads(r["apps"])), "script_ids": json.loads(r["script_ids"])}
-            for r in ctx.db.execute("SELECT * FROM profiles WHERE account_id=? ORDER BY name", (ctx.account,))]
+    return [profile_view(r) for r in ctx.db.execute("SELECT * FROM profiles WHERE account_id=? ORDER BY name", (ctx.account,))]
+
+
+def h_setup(ctx, body):
+    return list(SETUP.values())
 
 
 def h_add_profile(ctx, body):
     (name,) = need(body, "name")
-    apps, sids = norm_apps(body.get("apps")), body.get("script_ids") or []
-    cur = ctx.db.execute("INSERT INTO profiles(account_id,name,apps,script_ids) VALUES(?,?,?,?)",
-                         (ctx.account, name, json.dumps(apps), json.dumps(sids)))
+    apps, sids, setup = norm_apps(body.get("apps")), body.get("script_ids") or [], norm_setup(body.get("setup"))
+    cur = ctx.db.execute("INSERT INTO profiles(account_id,name,apps,script_ids,setup,description) VALUES(?,?,?,?,?,?)",
+                         (ctx.account, name, json.dumps(apps), json.dumps(sids), json.dumps(setup), str(body.get("description") or "")[:500]))
     audit(ctx.db, ctx.account, ctx.actor, "profile.add", name)
     return {"id": cur.lastrowid}
 
@@ -617,9 +745,11 @@ def h_update_profile(ctx, body, pid):
     row = ctx.db.execute("SELECT * FROM profiles WHERE id=? AND account_id=?", (pid, ctx.account)).fetchone()
     if not row:
         raise ApiError(404, "profile not found")
-    ctx.db.execute("UPDATE profiles SET name=?, apps=?, script_ids=? WHERE id=?",
+    ctx.db.execute("UPDATE profiles SET name=?, apps=?, script_ids=?, setup=?, description=? WHERE id=?",
                    (body.get("name") or row["name"], json.dumps(norm_apps(body["apps"]) if "apps" in body else json.loads(row["apps"])),
-                    json.dumps(body.get("script_ids", json.loads(row["script_ids"]))), pid))
+                    json.dumps(body.get("script_ids", json.loads(row["script_ids"]))),
+                    json.dumps(norm_setup(body["setup"]) if "setup" in body else json.loads(row["setup"] or "[]")),
+                    str(body.get("description", row["description"] or ""))[:500], pid))
     audit(ctx.db, ctx.account, ctx.actor, "profile.update", str(pid))
     return {}
 
@@ -829,6 +959,19 @@ def prune_old(db):
     db.execute("DELETE FROM jobs WHERE finished IS NOT NULL AND finished<? AND status IN ('done','failed','cancelled','halted')",
                (time.time() - days * 86400,))
     db.execute("DELETE FROM audit WHERE ts<?", (time.time() - 365 * 86400,))
+    db.execute("DELETE FROM events WHERE ts<?", (time.time() - days * 86400,))
+    db.execute("DELETE FROM presence WHERE slot<?", (int((time.time() - 31 * 86400) // PRESENCE_BUCKET),))
+
+
+def watch_presence(db):
+    """Turn last_seen into events: a device that stops checking in goes offline, one that comes back is online again."""
+    for d in db.execute("SELECT id, account_id, name, last_seen, was_online FROM devices").fetchall():
+        on = is_online(d)
+        if on != bool(d["was_online"]):
+            db.execute("UPDATE devices SET was_online=? WHERE id=?", (int(on), d["id"]))
+            event(db, d["account_id"], "info" if on else "warning", "device.online" if on else "device.offline",
+                  f"{d['name']} is {'back online' if on else 'offline (no check-in for ' + str(ONLINE_WINDOW) + ' s)'}", d["id"])
+            queue_notify(d["account_id"])
 
 
 def scheduler_loop():
@@ -836,6 +979,13 @@ def scheduler_loop():
     while True:
         try:
             run_due_schedules()
+            db = connect()
+            try:
+                watch_presence(db)
+                db.commit()
+                flush_notify()
+            finally:
+                db.close()
             if time.time() - last_prune > 3600:
                 db = connect()
                 try:
@@ -845,7 +995,7 @@ def scheduler_loop():
                     db.close()
                 last_prune = time.time()
         except Exception as e:  # noqa: BLE001
-            print("scheduler:", e)
+            log(logging.ERROR, "scheduler error", error=str(e))
         time.sleep(30)
 
 
@@ -854,7 +1004,8 @@ def h_get_settings(ctx, body):
     return {"registration": registration_open(ctx.db), "poll_interval": poll_interval(ctx.db),
             "retention_days": int(get_setting(ctx.db, "retention_days", 90)), "is_admin": is_admin(ctx.db, ctx.account),
             "server_time": datetime.datetime.now().isoformat(timespec="seconds"), "timezone": time.tzname[0],
-            "version": VERSION, "accounts": ctx.db.execute("SELECT COUNT(*) AS n FROM accounts").fetchone()["n"]}
+            "version": VERSION, "accounts": ctx.db.execute("SELECT COUNT(*) AS n FROM accounts").fetchone()["n"],
+            "metrics": bool(get_setting(ctx.db, "metrics_token_hash"))}
 
 
 def h_put_settings(ctx, body):
@@ -911,6 +1062,114 @@ def h_overview(ctx, body):
             "attention": attention[:12], "jobs_24h": jobs, "recent_failed": failed, "ram_total_gb": round(ram_mb / 1024)}
 
 
+# ---------------------------------------------------------------- monitoring
+RANGES = {"24h": (86400, 3600), "7d": (7 * 86400, 6 * 3600), "30d": (30 * 86400, 86400)}  # window, column width
+
+
+def h_monitor(ctx, body):
+    """Reachability per device: one cell per hour (24 h) / 6 h (7 d) / day (30 d) with the share of 5-minute slots the device
+    checked in, plus overall uptime. A device only counts from the moment it enrolled."""
+    span, step = RANGES.get(ctx.query.get("range") or "24h", RANGES["24h"])
+    now = time.time()
+    end = int(now // step + 1) * step
+    start = end - span
+    per_col = step // PRESENCE_BUCKET
+    out = []
+    for d in ctx.db.execute("SELECT * FROM devices WHERE account_id=? ORDER BY name", (ctx.account,)).fetchall():
+        seen = {r["slot"] for r in ctx.db.execute("SELECT slot FROM presence WHERE device_id=? AND slot>=?", (d["id"], int(start // PRESENCE_BUCKET)))}
+        born = d["created"] or start
+        cols, have, want = [], 0, 0
+        for c in range(start, end, step):
+            first = int(max(c, born) // PRESENCE_BUCKET)
+            last = int(min(c + step, now) // PRESENCE_BUCKET)
+            total = max(0, last - first + (1 if c + step > now >= c else 0))
+            if c + step <= born or c > now or total == 0:
+                cols.append(None)
+                continue
+            n = sum(1 for sl in range(first, first + total) if sl in seen)
+            cols.append(round(min(1.0, n / total), 3))
+            have, want = have + n, want + total
+        si = json.loads(d["sysinfo"] or "{}")
+        out.append({"id": d["id"], "name": d["name"], "online": is_online(d), "last_seen": d["last_seen"], "cols": cols,
+                    "uptime_pct": round(100 * have / want, 2) if want else None, "ips": si.get("ips") or [],
+                    "meta": json.loads(d["meta"] or "{}"), "tags": json.loads(d["tags"] or "[]")})
+    return {"range": ctx.query.get("range") or "24h", "start": start, "step": step, "per_col": per_col, "devices": out}
+
+
+def h_events(ctx, body):
+    q, args = "SELECT * FROM events WHERE account_id=?", [ctx.account]
+    if ctx.query.get("level") in ("info", "warning", "error"):
+        q += " AND level=?"
+        args.append(ctx.query["level"])
+    if (ctx.query.get("device_id") or "").isdigit():
+        q += " AND device_id=?"
+        args.append(int(ctx.query["device_id"]))
+    if (ctx.query.get("before") or "").isdigit():
+        q += " AND id<?"
+        args.append(int(ctx.query["before"]))
+    return [{"id": r["id"], "ts": r["ts"], "level": r["level"], "kind": r["kind"], "device_id": r["device_id"], "message": r["message"]}
+            for r in ctx.db.execute(q + " ORDER BY id DESC LIMIT 200", args)]
+
+
+def _esc(v):
+    return str(v).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def metrics_text(db):
+    """Prometheus exposition format: one series per device, labelled with name, os, site and role."""
+    lines, now = [], time.time()
+
+    def metric(name, kind, help_, rows):
+        lines.append(f"# HELP openite_{name} {help_}")
+        lines.append(f"# TYPE openite_{name} {kind}")
+        for labels, value in rows:
+            lab = ",".join(f'{k}="{_esc(v)}"' for k, v in labels.items())
+            lines.append(f"openite_{name}{{{lab}}} {value}")
+
+    devs = db.execute("SELECT * FROM devices").fetchall()
+    catalogs = {}
+    base, up, last, pend, wu, disk, mem, upt, inst = [], [], [], [], [], [], [], [], []
+    for d in devs:
+        si, meta, inv = json.loads(d["sysinfo"] or "{}"), json.loads(d["meta"] or "{}"), json.loads(d["inventory"] or "{}")
+        lab = {"device": d["name"], "id": d["id"], "os": si.get("os") or d["os"] or "", "site": meta.get("site", ""), "role": meta.get("role", "")}
+        base.append((dict(lab, version=si.get("os_version") or "", agent=d["agent_version"] or "", status=meta.get("status", "active")), 1))
+        up.append((lab, int(is_online(d))))
+        last.append((lab, round(now - d["last_seen"]) if d["last_seen"] else -1))
+        pend.append((lab, len(inv.get("upgradable") or {})))
+        inst.append((lab, len(inv.get("installed") or {})))
+        if "win_updates" in si:
+            wu.append((lab, len(si.get("win_updates") or [])))
+        if si.get("disk_total_gb"):
+            disk.append((lab, si.get("disk_free_gb") or 0))
+        if si.get("mem_total_mb"):
+            mem.append((lab, round(1 - (si.get("mem_free_mb") or 0) / si["mem_total_mb"], 4)))
+        if si.get("uptime_s") is not None:
+            upt.append((lab, si.get("uptime_s") or 0))
+    metric("device_info", "gauge", "Device inventory record (always 1).", base)
+    metric("device_up", "gauge", "1 if the device checked in within the last 90 seconds.", up)
+    metric("device_last_seen_seconds", "gauge", "Seconds since the device last checked in (-1 = never).", last)
+    metric("device_package_updates", "gauge", "Package updates the device's package manager reports.", pend)
+    metric("device_packages_installed", "gauge", "Packages installed.", inst)
+    metric("device_windows_updates_pending", "gauge", "Windows updates waiting to be installed.", wu)
+    metric("device_disk_free_gigabytes", "gauge", "Free space on the system drive.", disk)
+    metric("device_memory_used_ratio", "gauge", "Share of memory in use at the last check-in.", mem)
+    metric("device_uptime_seconds", "gauge", "Time since the device booted, at the last check-in.", upt)
+    jobs = [({"status": r["status"]}, r["n"]) for r in db.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status")]
+    metric("jobs", "gauge", "Jobs in the history, by status.", jobs)
+    return "\n".join(lines) + "\n"
+
+
+def h_metrics_token(ctx, body):
+    """Create (or replace) the bearer token Prometheus uses for /metrics. Administrator only; shown once."""
+    if not is_admin(ctx.db, ctx.account):
+        raise ApiError(403, "only the administrator can manage the metrics token")
+    tok = "om_" + secrets.token_urlsafe(24)
+    set_setting(ctx.db, "metrics_token_hash", hashlib.sha256(tok.encode()).hexdigest())
+    audit(ctx.db, ctx.account, ctx.actor, "metrics.token", "created")
+    event(ctx.db, ctx.account, "info", "metrics.token", "A new Prometheus metrics token was created; the old one stopped working")
+    return {"token": tok}
+
+
 # ---------------------------------------------------------------- agent-facing
 def h_agent_enroll(ctx, body):
     (code,) = need(body, "code")
@@ -925,13 +1184,15 @@ def h_agent_enroll(ctx, body):
         "INSERT INTO devices(account_id,name,os,manager,token,last_seen,created,tags) VALUES(?,?,?,?,?,?,?,?)",
         (row["account_id"], name, body.get("os"), body.get("manager"), tok, time.time(), time.time(), row["tags"] or "[]"))
     audit(ctx.db, row["account_id"], f"device:{name}", "device.enroll", f"id={cur.lastrowid}")
+    event(ctx.db, row["account_id"], "info", "device.enrolled", f"{name} joined", cur.lastrowid)
     return {"device_id": cur.lastrowid, "token": tok}
 
 
 def h_agent_checkin(ctx, body):
     inv = {k: body.get(k) or {} for k in ("installed", "upgradable", "installed_names", "upgradable_names", "pinned", "pinned_names")}
     sysinfo = body.get("sysinfo")
-    sysinfo = json.dumps(sysinfo) if isinstance(sysinfo, dict) and len(json.dumps(sysinfo)) < 20000 else None
+    sysinfo = json.dumps(sysinfo) if isinstance(sysinfo, dict) and len(json.dumps(sysinfo)) < 60000 else None
+    mark_seen(ctx.db, ctx.device)
     ctx.db.execute("UPDATE devices SET last_seen=?, inventory=?, os=COALESCE(?,os), manager=COALESCE(?,manager), agent_version=?, "
                    "sysinfo=COALESCE(?,sysinfo) WHERE id=?",
                    (time.time(), json.dumps(inv), body.get("os"), body.get("manager"), body.get("agent_version"), sysinfo, ctx.device))
@@ -941,7 +1202,7 @@ def h_agent_checkin(ctx, body):
 
 def claim_job(ctx):
     """Hand the device its next runnable job (marking it running), or None. Respects maintenance windows and rollouts."""
-    ctx.db.execute("UPDATE devices SET last_seen=? WHERE id=?", (time.time(), ctx.device))
+    mark_seen(ctx.db, ctx.device)
     settings = json.loads(ctx.db.execute("SELECT settings FROM devices WHERE id=?", (ctx.device,)).fetchone()["settings"] or "{}")
     window_open = in_window(settings)
     for row in ctx.db.execute("SELECT * FROM jobs WHERE device_id=? AND status='queued' ORDER BY id", (ctx.device,)).fetchall():
@@ -1005,6 +1266,10 @@ def h_agent_result(ctx, body, jid):
         raise ApiError(400, "bad status")
     ctx.db.execute("UPDATE jobs SET status=?, log=?, finished=? WHERE id=? AND device_id=?",
                    (status, log[-200_000:], time.time(), jid, ctx.device))
+    j = ctx.db.execute("SELECT j.title, d.name FROM jobs j JOIN devices d ON d.id=j.device_id WHERE j.id=?", (jid,)).fetchone()
+    if j:
+        event(ctx.db, ctx.account, "info" if status == "done" else "error", "job." + status,
+              f"{j['title']} {'finished' if status == 'done' else 'failed'} on {j['name']}", ctx.device)
     row = ctx.db.execute("SELECT rollout_id, rollout_max_fail FROM jobs WHERE id=?", (jid,)).fetchone()
     if row and row["rollout_id"]:
         evaluate_rollout(ctx.db, row["rollout_id"], row["rollout_max_fail"], ctx.account)
@@ -1040,6 +1305,10 @@ ROUTES = [
     ("DELETE", r"/api/schedules/(\d+)", h_del_schedule, "user"),
     ("GET", r"/api/audit", h_audit, "user"),
     ("GET", r"/api/overview", h_overview, "user"),
+    ("GET", r"/api/monitor", h_monitor, "user"),
+    ("GET", r"/api/event-log", h_events, "user"),
+    ("GET", r"/api/setup", h_setup, "user"),
+    ("POST", r"/api/metrics-token", h_metrics_token, "user"),
     ("GET", r"/api/settings", h_get_settings, "user"),
     ("PUT", r"/api/settings", h_put_settings, "user"),
     ("POST", r"/api/jobs", h_create_jobs, "user"),
@@ -1064,10 +1333,13 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "Openite/0.2"
 
     def log_message(self, fmt, *args):
-        if os.environ.get("OPENITE_VERBOSE"):
-            super().log_message(fmt, *args)
+        pass  # requests are logged by dispatch() at debug level, errors at warning; set OPENITE_LOG_LEVEL=debug to see all
 
     def send_json(self, status, obj):
+        self.status_sent = status
+        return self._send_json(status, obj)
+
+    def _send_json(self, status, obj):
         data = json.dumps(obj).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -1112,6 +1384,23 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             pass  # the tab closed
 
+    def serve_metrics(self):
+        db = connect()
+        try:
+            want = get_setting(db, "metrics_token_hash")
+            got = hashlib.sha256(self.bearer().encode()).hexdigest()
+            if not want or not hmac.compare_digest(want, got):
+                self.send_json(401, {"error": "metrics need a bearer token: create one in Settings > Monitoring"})
+                return
+            data = metrics_text(db).encode()
+        finally:
+            db.close()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def dispatch(self, method):
         path, _, qs = self.path.partition("?")
         if method == "GET" and re.fullmatch(r"/icons/[a-z0-9][a-z0-9._-]*\.svg", path):
@@ -1138,6 +1427,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if method == "GET" and path == "/api/events":
             self.serve_events()
+            return
+        if method == "GET" and path == "/metrics":
+            self.serve_metrics()
             return
         try:
             for m, rx, fn, auth in ROUTES:
@@ -1185,8 +1477,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(200, res)
         except ApiError as e:
             self.send_json(e.status, {"error": e.msg})
+            if e.status >= 500 or e.status in (401, 403) and path in ("/api/login", "/api/agent/enroll"):
+                log(logging.WARNING, f"{method} {path} refused: {e.msg}", status=e.status, client=self.client_address[0])
         except Exception as e:  # noqa: BLE001
             self.send_json(500, {"error": f"server error: {e}"})
+            LOG.exception("%s %s failed", method, path)
+        if LOG.isEnabledFor(logging.DEBUG) and not path.startswith("/api/agent/poll"):
+            log(logging.DEBUG, f"{method} {path}", status=getattr(self, "status_sent", 0), client=self.client_address[0])
 
     def do_GET(self): self.dispatch("GET")
     def do_POST(self): self.dispatch("POST")
@@ -1209,9 +1506,10 @@ def main():
     ap.add_argument("--db", default=os.environ.get("OPENITE_DB"))
     ap.add_argument("--no-registration", action="store_true", help="disallow new accounts (after you've made yours)")
     a = ap.parse_args()
+    setup_logging()
     srv = make_server(a.host, a.port, a.db, not (a.no_registration or os.environ.get("OPENITE_NO_REGISTRATION")))
     threading.Thread(target=scheduler_loop, daemon=True).start()
-    print(f"Openite server running at http://{a.host}:{srv.server_address[1]}   (data: {STATE['db']})\nPress Ctrl+C to stop.")
+    log(logging.INFO, f"Openite server {VERSION} listening on http://{a.host}:{srv.server_address[1]}", data=STATE["db"])
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

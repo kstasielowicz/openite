@@ -213,6 +213,22 @@ main{min-width:0;background:var(--bg)}
 .hero .hi{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--warn);color:#fff;flex:none}
 .hero .tiles{display:flex}.hero .tiles>*{margin-left:-7px;box-shadow:0 0 0 2px var(--panel)}.hero .tiles>*:first-child{margin-left:0}
 
+.setrow{display:flex;align-items:flex-start;gap:12px;padding:12px 18px;border-bottom:1px solid var(--line2);cursor:pointer;transition:background .12s}
+.setrow:last-child{border-bottom:0}.setrow:hover{background:var(--panel2)}.setrow.on{background:color-mix(in srgb,var(--accent-weak) 55%,transparent)}
+.setrow input[type=checkbox]{margin-top:3px}
+.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text3)}.legend span{display:inline-flex;align-items:center;gap:5px}
+.cells{display:flex;gap:2px;min-width:240px}.cell{flex:1;height:22px;border-radius:3px;background:var(--hover);display:block;min-width:4px}
+.legend .cell{flex:none;width:12px;height:12px}
+.cell.up{background:var(--ok)}.cell.part{background:color-mix(in srgb,var(--ok) 45%,var(--warn))}.cell.low{background:var(--warn)}.cell.down{background:var(--bad)}.cell.none{background:var(--hover)}
+.tbl.mon td{padding-top:9px;padding-bottom:9px}
+.axis{display:flex;justify-content:space-between;text-transform:none;letter-spacing:0;font-weight:500}
+.ev .evi{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--hover);color:var(--text2);flex:none}
+.ev.error .evi{background:var(--bad-weak);color:var(--bad)}.ev.warning .evi{background:var(--warn-weak);color:var(--warn-text)}
+.ev.info .evi{background:var(--ok-weak);color:var(--ok-text)}
+.slog{margin:4px 0 6px 32px}.slog .log{max-height:260px}
+.srow.click{cursor:pointer;border-radius:8px}.srow.click:hover{background:var(--panel2)}
+
 /* ================================================================== stats / overview */
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:16px}.stats>.panel+.panel{margin-top:0}
 .stat{padding:18px 20px;position:relative;overflow:hidden}
@@ -322,7 +338,7 @@ main{min-width:0;background:var(--bg)}
   .brand{padding:2px 8px}.nav{flex-direction:row;flex-wrap:wrap}.nav h6{display:none}.nav a.on::before{display:none}.side-foot{margin:0 0 0 auto;border:0;padding:0;flex-direction:row}
   .syncchip .meta small{display:none}
   .top,.content{padding-left:16px;padding-right:16px}.top{flex-wrap:wrap;align-items:flex-start}.top .actions{margin-left:0}
-  .grid2{grid-template-columns:1fr}.kv{grid-template-columns:110px 1fr}.search,.search .input{width:100%}
+  .grid2,.formgrid{grid-template-columns:1fr}.kv{grid-template-columns:110px 1fr}.search,.search .input{width:100%}
   .hero{flex-wrap:wrap}.hero .tiles{display:none}.hero .grow{flex:1 1 180px}.hero>.btn{flex:1 1 auto}
   .syncchip{padding:4px 6px;border:0;background:none}.syncchip .meta{display:none}
   .card .hov{display:none}
@@ -386,9 +402,9 @@ const S = {
   icons: new Set(), devices: [], catalog: [], packs: [], jobs: [], profiles: [], scripts: [], assignments: [], schedules: [], audit: [], overview: null, settings: null,
   sync: {ready: false, busy: false, steps: []}, welcome: null,
   sel: {apps: new Map(), devices: new Set()}, q: '', cat: 'all', tab: 'all', rollout: true, openJob: null, jobFilter: 'all',
-  drawer: null, versions: {}, hw: null, theme: LS.get('theme') || 'system', devQ: '', devTag: '', autoSel: false, hideInst: LS.get('hideInst') === '1', pkgQ: '', pkgF: 'all',
+  drawer: null, versions: {}, hw: null, theme: LS.get('theme') || 'system', devQ: '', devTag: '', autoSel: false, setup: [], monitor: null, events: [], monRange: '24h', evLevel: '', setupSel: new Map(), devSite: '', devStatus: '', hideInst: LS.get('hideInst') === '1', pkgQ: '', pkgF: 'all',
 };
-const routeOf = () => { const [page, id] = location.hash.replace(/^#\/?/, '').split('/'); if (page === 'devices' && id) return {page: 'device', id};
+const routeOf = () => { const [page, id] = location.hash.replace(/^#\/?/, '').split('/'); if (page === 'devices' && id) return {page: 'device', id}; if (page === 'profiles' && id) return {page: 'profile', id};
   return {page: page || (S.lite ? 'apps' : 'overview'), id}; };
 const go = path => { location.hash = '#/' + path; };
 
@@ -480,13 +496,14 @@ function appInfo(a, devs) {
 }
 
 // ---------- jobs: steps, titles, live activity per app
-const ING = {install: 'Installing', upgrade: 'Updating', uninstall: 'Removing', pin: 'Holding', unpin: 'Releasing', script: 'Running'};
-const VERB = {install: 'Install', upgrade: 'Update', uninstall: 'Remove', pin: 'Hold', unpin: 'Release hold on', script: 'Run'};
+const ING = {install: 'Installing', upgrade: 'Updating', uninstall: 'Removing', pin: 'Holding', unpin: 'Releasing', script: 'Running', setup: 'Applying'};
+const VERB = {install: 'Install', upgrade: 'Update', uninstall: 'Remove', pin: 'Hold', unpin: 'Release hold on', script: 'Run', setup: ''};
 function jobTitle(j) {
   const st = (j.steps || []).filter(x => x.type !== 'skip');
   if (!st.length || j.source !== 'manual' && j.title) return j.title;
-  if (st.length === 1) return st[0].type === 'upgrade' && st[0].app === 'everything' ? 'Update everything' : `${VERB[st[0].type] || st[0].type} ${st[0].app}`;
+  if (st.length === 1) return st[0].type === 'upgrade' && st[0].app === 'everything' ? 'Update everything' : st[0].type === 'setup' ? st[0].app : `${VERB[st[0].type] || st[0].type} ${st[0].app}`;
   const types = [...new Set(st.map(x => x.type))];
+  if (types.length === 1 && types[0] === 'setup') return j.title || plural(st.length, 'Windows setting');
   return types.length === 1 ? `${VERB[types[0]] || types[0]} ${plural(st.length, 'app')}` : j.title;
 }
 const progressOf = j => { const st = j.steps || [], n = st.length, d = st.filter(x => ['done', 'failed', 'skipped'].includes(x.status)).length; return {n, d}; };
@@ -514,13 +531,17 @@ async function load() {
   if (!S.lite && r === 'automation') want.push('assignments', 'schedules');
   if (!S.lite && r === 'audit') want.push('audit');
   if (!S.lite && r === 'settings') want.push('settings');
-  const res = await Promise.all(want.map(p => api('GET', '/api/' + p)));
+  if (!S.setup.length) want.push('setup');
+  if (!S.lite && r === 'monitoring') want.push('monitor');
+  if (!S.lite && r === 'events') want.push('events');
+  const PATH = {monitor: 'monitor?range=' + S.monRange, events: 'event-log' + (S.evLevel ? '?level=' + S.evLevel : '')};
+  const res = await Promise.all(want.map(p => api('GET', '/api/' + (PATH[p] || p))));
   want.forEach((p, i) => S[p] = res[i]);
   S.sel.devices = new Set([...S.sel.devices].filter(id => S.devices.some(d => d.id === id)));
   if (!S.autoSel && S.devices.length === 1) { S.sel.devices.add(S.devices[0].id); S.autoSel = true; }
   if (S.lite) { S.sync = await api('GET', '/api/sync'); if (!S.hw) api('GET', '/api/hardware').then(x => { S.hw = x; render(); }).catch(() => {}); }
 }
-const signature = () => JSON.stringify([S.devices, S.jobs.map(j => [j.id, j.status, j.finished, (j.log || '').length, j.steps]), S.catalog.length, S.sync.busy, S.profiles, S.overview, S.assignments, S.schedules, S.settings, S.scripts.length, S.live]);
+const signature = () => JSON.stringify([S.devices, S.jobs.map(j => [j.id, j.status, j.finished, (j.log || '').length, j.steps]), S.catalog.length, S.sync.busy, S.profiles, S.overview, S.assignments, S.schedules, S.settings, S.scripts.length, S.live, S.monitor, S.events]);
 async function poll(force) {   // timers skip hidden tabs; live events and becoming visible again always refresh
   if (!S.token || (document.hidden && !force)) return;
   const before = signature();
@@ -587,12 +608,17 @@ function logoMark(size = 22) { const s = h('span', {class: 'ic'}); s.innerHTML =
 function navModel() {
   const running = activeJobs().length;
   if (S.lite) { const d = S.devices[0], up = d ? (d.packages || []).filter(p => p.available).length || d.n_upgradable : 0;
-    return [{items: [{id: 'apps', label: 'Apps', icon: 'apps'}, {id: 'system', label: 'This PC', icon: 'monitor', n: up || '', tone: 'warn', hint: plural(up, 'update') + ' available'}, {id: 'activity', label: 'Activity', icon: 'activity', n: running || '', tone: 'info'}]}]; }
+    const wu = d && d.sysinfo && d.sysinfo.win_updates ? d.sysinfo.win_updates.length : 0;
+    return [{items: [{id: 'apps', label: 'Apps', icon: 'apps'}, {id: 'system', label: 'This PC', icon: 'monitor', n: up || '', tone: 'warn', hint: plural(up, 'update') + ' available'},
+      d && /windows/i.test(d.os || (d.sysinfo || {}).os || '') ? {id: 'setup', label: 'Windows setup', icon: 'wrench', n: wu || '', tone: 'warn', hint: plural(wu, 'Windows update') + ' waiting'} : null,
+      {id: 'activity', label: 'Activity', icon: 'activity', n: running || '', tone: 'info'}].filter(Boolean)}]; }
+  const offline = S.devices.filter(d => !d.online).length;
   return [
     {items: [{id: 'overview', label: 'Overview', icon: 'overview'}, {id: 'devices', label: 'Devices', icon: 'server', n: S.devices.length || ''},
-             {id: 'apps', label: 'Apps', icon: 'apps'}, {id: 'activity', label: 'Activity', icon: 'activity', n: running || ''}]},
+             {id: 'monitoring', label: 'Monitoring', icon: 'wifi', n: offline || '', tone: 'warn', hint: plural(offline, 'device') + ' offline'},
+             {id: 'apps', label: 'Apps', icon: 'apps'}, {id: 'activity', label: 'Activity', icon: 'activity', n: running || '', tone: 'info'}]},
     {title: 'Automation', items: [{id: 'profiles', label: 'Profiles', icon: 'layers'}, {id: 'scripts', label: 'Scripts', icon: 'terminal'}, {id: 'automation', label: 'Auto-sync', icon: 'sync'}]},
-    {title: 'Administration', items: [{id: 'audit', label: 'Audit log', icon: 'log'}, {id: 'settings', label: 'Settings', icon: 'settings'}]},
+    {title: 'Administration', items: [{id: 'events', label: 'Events', icon: 'list'}, {id: 'audit', label: 'Audit log', icon: 'log'}, {id: 'settings', label: 'Settings', icon: 'settings'}]},
   ];
 }
 function sidebar(page) {
@@ -600,7 +626,7 @@ function sidebar(page) {
   return h('aside', {class: 'side'},
     h('a', {class: 'brand', href: '#/'}, h('span', {class: 'logo'}, logoMark(17)), 'Openite', h('small', {}, S.version ? 'v' + S.version : '')),
     h('nav', {class: 'nav'}, navModel().map(g => [g.title && h('h6', {}, g.title),
-      g.items.map(i => h('a', {href: '#/' + i.id, class: page === i.id || (page === 'device' && i.id === 'devices') ? 'on' : ''}, ic(i.icon, 17), i.label, i.n ? h('span', {class: 'n ' + (i.tone || ''), title: i.hint || null}, i.n) : null))])),
+      g.items.map(i => h('a', {href: '#/' + i.id, class: page === i.id || (page === 'device' && i.id === 'devices') || (page === 'profile' && i.id === 'profiles') ? 'on' : ''}, ic(i.icon, 17), i.label, i.n ? h('span', {class: 'n ' + (i.tone || ''), title: i.hint || null}, i.n) : null))])),
     h('div', {class: 'side-foot'},
       S.lite && h('div', {class: 'syncchip'}, syncing ? h('span', {class: 'spin'}) : h('span', {class: 'live', style: S.live ? null : {background: 'var(--text3)', boxShadow: 'none'}}),
         h('div', {class: 'meta'}, h('span', {}, syncing ? 'Reading this PC…' : S.live ? 'Connected' : 'Reconnecting…'), !syncing && S.devices[0] && S.devices[0].synced_at ? h('small', {}, 'Scanned ' + ago(S.devices[0].synced_at)) : null),
@@ -636,7 +662,7 @@ function render() {
   const scroll = window.scrollY;
   if (!S.token && !S.lite) { root.replaceChildren(loginView()); return; }
   let {page} = routeOf();
-  const okPages = S.lite ? ['apps', 'system', 'activity'] : ['overview', 'devices', 'device', 'apps', 'activity', 'profiles', 'scripts', 'automation', 'audit', 'settings'];
+  const okPages = S.lite ? ['apps', 'system', 'setup', 'activity'] : ['overview', 'devices', 'device', 'monitoring', 'apps', 'activity', 'profiles', 'profile', 'scripts', 'automation', 'events', 'audit', 'settings'];
   if (!okPages.includes(page)) page = S.lite ? 'apps' : 'overview';
   let view;
   try { view = PAGES[page](); } catch (e) { console.error(e); view = h('div', {class: 'content'}, h('div', {class: 'panel empty'}, h('h3', {}, 'Something went wrong'), h('p', {}, String(e.message)))); }
@@ -838,7 +864,11 @@ function devicePicker() {
 const sysRows = (si, d) => {
   const rows = [];
   const add = (k, v) => { if (v !== undefined && v !== null && v !== '' && v !== '—') rows.push(h('div', {}, k), h('div', {}, v)); };
-  add('Operating system', [si.os, si.os_version].filter(Boolean).join(' '));
+  add('Operating system', si.os);
+  add('Version', si.os_version);
+  add('Edition', si.edition);
+  add('Last Windows update', si.last_patch);
+  add('Serial number', si.serial);
   add('Model', [clean(si.maker), clean(si.model)].filter(Boolean).join(' '));
   if (si.virtual) add('Virtual machine', si.virtual);
   add('Processor', si.cpu && `${si.cpu}${si.cores ? ` · ${si.cores} cores` : ''}${si.threads ? ` / ${si.threads} threads` : ''}`);
@@ -883,7 +913,7 @@ PAGES.system = function () {
         stat('uptime', '', 'Uptime', uptime(si.uptime_s), si.mem_total_mb ? gb(si.mem_total_mb) + ' memory' : '', null)),
       h('div', {class: 'grid2'},
         h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'System')), h('div', {class: 'pb', style: {paddingTop: '6px', paddingBottom: '6px'}}, h('div', {class: 'kv'}, sysRows(si, d)))),
-        h('div', {class: 'stack'}, healthPanel(si, null),
+        h('div', {class: 'stack'}, healthPanel(si, null), /windows/i.test(si.os || d.os || '') ? winUpdatePanel(d) : null,
           drv.length > 0 && h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Drivers and vendor tools'), h('span', {class: 'sub'}, 'Vendor tools only, never raw drivers')),
             h('div', {class: 'pb flush'}, drv.map(a => h('div', {class: 'list-row'}, h('span', {class: 'pkgtile'}, ic(a.app_key ? 'wrench' : 'external', 15)), h('div', {class: 'grow'}, h('div', {class: 'name'}, a.title), h('div', {class: 'muted', style: {fontSize: '12.5px'}}, a.why)),
               a.app_key ? h('button', {class: 'btn sm', onclick: () => { S.sel.apps.set(a.app_key, {version: ''}); go('apps'); toast('Added to your selection'); }}, 'Add to selection')
@@ -985,24 +1015,30 @@ function syncCell(d) { if (!d.managed) return h('span', {class: 'muted'}, '—')
 
 PAGES.devices = function () {
   const q = S.devQ.toLowerCase();
-  const list = S.devices.filter(d => (!q || (d.name + ' ' + d.tags.join(' ') + ' ' + (d.sysinfo || {}).os).toLowerCase().includes(q)) && (!S.devTag || d.tags.includes(S.devTag)));
+  const mm = d => d.meta || {};
+  const list = S.devices.filter(d => (!q || [d.name, d.tags.join(' '), (d.sysinfo || {}).os, mm(d).role, mm(d).site, mm(d).owner, mm(d).asset_tag, (d.sysinfo || {}).serial].join(' ').toLowerCase().includes(q))
+    && (!S.devTag || d.tags.includes(S.devTag)) && (!S.devSite || mm(d).site === S.devSite) && (!S.devStatus || (mm(d).status || 'active') === S.devStatus));
   const sel = S.sel.devices, allOn = list.length && list.every(d => sel.has(d.id));
   return h('div', {}, topbar('Devices', `${plural(S.devices.length, 'device')} · ${S.devices.filter(d => d.online).length} online`, h('button', {class: 'btn primary', onclick: addDeviceModal}, ic('plus', 15), 'Add device')),
     h('div', {class: 'content'},
       S.devices.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No devices yet'), h('p', {}, 'Enroll a PC, server or VM to start managing it from here.'), h('button', {class: 'btn primary', onclick: addDeviceModal}, 'Add your first device')) : [
       h('div', {class: 'toolbar'}, h('div', {class: 'search'}, ic('search', 15), h('input', {class: 'input', 'data-fk': 'search', placeholder: 'Search devices', value: S.devQ, oninput: e => { S.devQ = e.target.value; render(); }}), !S.devQ && h('kbd', {}, '/')),
-        tags().length ? h('select', {class: 'select', style: {width: '170px'}, onchange: e => { S.devTag = e.target.value; render(); }}, h('option', {value: ''}, 'All tags'), tags().map(t => h('option', {value: t, selected: S.devTag === t}, '#' + t))) : null,
+        tags().length ? h('select', {class: 'select', style: {width: '150px'}, onchange: e => { S.devTag = e.target.value; render(); }}, h('option', {value: ''}, 'All tags'), tags().map(t => h('option', {value: t, selected: S.devTag === t}, '#' + t))) : null,
+        metaList('site').length ? h('select', {class: 'select', style: {width: '150px'}, onchange: e => { S.devSite = e.target.value; render(); }}, h('option', {value: ''}, 'All sites'), metaList('site').map(t => h('option', {value: t, selected: S.devSite === t}, t))) : null,
+        h('select', {class: 'select', style: {width: '150px'}, onchange: e => { S.devStatus = e.target.value; render(); }}, h('option', {value: ''}, 'Any status'), STATUSES.map(t => h('option', {value: t, selected: S.devStatus === t}, t[0].toUpperCase() + t.slice(1)))),
         sel.size > 0 && h('div', {class: 'row', style: {marginLeft: 'auto'}}, h('span', {class: 'muted'}, sel.size + ' selected'),
           h('button', {class: 'btn sm', onclick: () => go('apps')}, ic('download', 14), 'Install apps…'),
           h('button', {class: 'btn sm', onclick: () => runJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update')}, ic('arrow-up', 14), 'Update all'),
           h('button', {class: 'btn sm', onclick: async () => { const t = await promptDialog('Add tags', 'Tags (comma separated)', '', 'Added to every selected device'); if (t) { for (const d of S.devices.filter(x => sel.has(x.id))) await api('PUT', '/api/devices/' + d.id, {tags: [...new Set([...d.tags, ...t.split(',').map(s => s.trim()).filter(Boolean)])]}); await load(); render(); toast('Tags added'); } }}, ic('tag', 14), 'Tag…'))),
       h('div', {class: 'panel tbl-wrap'}, h('table', {class: 'tbl'},
-        h('thead', {}, h('tr', {}, h('th', {class: 'c'}, h('input', {type: 'checkbox', checked: allOn, onchange: e => { list.forEach(d => e.target.checked ? sel.add(d.id) : sel.delete(d.id)); render(); }})), ['Name', 'Status', 'System', 'Tags', 'Updates', 'Sync'].map(t => h('th', {}, t)))),
+        h('thead', {}, h('tr', {}, h('th', {class: 'c'}, h('input', {type: 'checkbox', checked: allOn, onchange: e => { list.forEach(d => e.target.checked ? sel.add(d.id) : sel.delete(d.id)); render(); }})), ['Name', 'Status', 'Role / site', 'System', 'Tags', 'Updates', 'Sync'].map(t => h('th', {}, t)))),
         h('tbody', {}, list.map(d => { const si = d.sysinfo || {};
           return h('tr', {class: 'click', onclick: e => { if (e.target.tagName !== 'INPUT') go('devices/' + d.id); }},
             h('td', {class: 'c'}, h('input', {type: 'checkbox', checked: sel.has(d.id), onchange: e => { e.target.checked ? sel.add(d.id) : sel.delete(d.id); render(); }})),
             h('td', {}, h('div', {class: 'name'}, d.name), d.notes ? h('div', {class: 'muted', style: {fontSize: '12px'}}, d.notes) : null),
-            h('td', {}, devStatus(d)), h('td', {}, h('div', {}, [si.os, si.virtual ? 'VM' : ''].filter(Boolean).join(' · ') || d.os || '—'), si.cpu ? h('div', {class: 'muted', style: {fontSize: '12px'}}, `${si.threads || ''} vCPU · ${si.mem_total_mb ? gb(si.mem_total_mb) : ''}`) : null),
+            h('td', {}, devStatus(d), mm(d).status && mm(d).status !== 'active' ? h('div', {style: {marginTop: '4px'}}, statusBadge(mm(d).status)) : null),
+            h('td', {}, mm(d).role || mm(d).site ? [h('div', {}, mm(d).role || '—'), h('div', {class: 'muted', style: {fontSize: '12px'}}, [mm(d).site, mm(d).location].filter(Boolean).join(' · '))] : h('span', {class: 'muted'}, '—')),
+            h('td', {}, h('div', {}, [si.os, si.virtual ? 'VM' : ''].filter(Boolean).join(' · ') || d.os || '—'), si.cpu ? h('div', {class: 'muted', style: {fontSize: '12px'}}, `${si.threads || ''} vCPU · ${si.mem_total_mb ? gb(si.mem_total_mb) : ''}`) : null),
             h('td', {}, h('div', {class: 'tags'}, d.tags.map(t => h('span', {class: 'tag'}, t)))),
             h('td', {}, d.n_upgradable ? badge(d.n_upgradable + ' available', 'warn') : h('span', {class: 'muted'}, 'Up to date')), h('td', {}, syncCell(d)));
         }))), list.length === 0 && h('div', {class: 'empty'}, 'No devices match.'))]));
@@ -1013,17 +1049,19 @@ PAGES.device = function () {
   const id = +routeOf().id, d = S.devices.find(x => x.id === id);
   if (!d) return h('div', {}, topbar('Device not found', null, h('a', {class: 'btn', href: '#/devices'}, 'Back to devices')));
   const tab = S.devTab || 'overview', si = d.sysinfo || {};
-  const tabs = [['overview', 'Overview'], ['software', 'Software'], ['activity', 'Activity'], ['settings', 'Settings']];
+  const tabs = [['overview', 'Overview'], ['record', 'Record'], ['software', 'Software'], ['activity', 'Activity'], ['settings', 'Settings']];
+  const isWin = /windows/i.test(si.os || d.os || '');
   const crumb = h('div', {class: 'crumb'}, h('a', {href: '#/devices'}, 'Devices'), ic('chevron-right', 13), d.name);
   let body;
   if (tab === 'overview') body = h('div', {}, h('div', {class: 'grid2'}, h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'System')), h('div', {class: 'pb'}, h('div', {class: 'kv'}, sysRows(si, d)))),
-      h('div', {class: 'stack'}, healthPanel(si, d), d.notes ? h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Notes')), h('div', {class: 'pb sec', style: {whiteSpace: 'pre-wrap'}}, d.notes)) : null,
+      h('div', {class: 'stack'}, recordSummary(d), healthPanel(si, d), isWin ? winUpdatePanel(d, {offline: !d.online}) : null, d.notes ? h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Notes')), h('div', {class: 'pb sec', style: {whiteSpace: 'pre-wrap'}}, d.notes)) : null,
         d.managed ? h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Auto-sync'), d.missing.length ? badge('Out of sync', 'warn') : badge('In sync', 'ok')),
           d.missing.length ? h('div', {class: 'pb sec'}, 'Differences: ' + d.missing.join(', ')) : h('div', {class: 'pb sec'}, 'This device matches its assigned profiles.')) : null)));
   else if (tab === 'software') body = softwareTab(d);
+  else if (tab === 'record') body = deviceRecord(d);
   else if (tab === 'activity') body = jobList(S.jobs.filter(j => j.device_id === d.id));
   else body = deviceSettings(d);
-  return h('div', {}, topbar(d.name, h('span', {class: 'row', style: {gap: '10px'}}, devStatus(d), d.tags.length ? h('span', {class: 'tags'}, d.tags.map(t => h('span', {class: 'tag'}, t))) : null),
+  return h('div', {}, topbar(d.name, h('span', {class: 'row', style: {gap: '10px'}}, devStatus(d), (d.meta || {}).status && d.meta.status !== 'active' ? statusBadge(d.meta.status) : null, (d.meta || {}).role ? h('span', {class: 'muted'}, d.meta.role + ((d.meta || {}).site ? ' · ' + d.meta.site : '')) : null, d.tags.length ? h('span', {class: 'tags'}, d.tags.map(t => h('span', {class: 'tag'}, t))) : null),
       [h('button', {class: 'btn', onclick: () => { S.sel.devices = new Set([d.id]); go('apps'); }}, ic('download', 15), 'Install apps'),
        h('button', {class: 'btn', onclick: () => { S.sel.devices = new Set([d.id]); runJob([{type: 'upgrade', apps: 'all'}], 'Update everything', 'Update'); }}, ic('arrow-up', 15), 'Update all')], crumb),
     h('div', {class: 'content'}, h('div', {class: 'tabs'}, tabs.map(([t, l]) => h('a', {class: tab === t ? 'on' : '', onclick: () => { S.devTab = t; render(); }}, l))), body));
@@ -1083,13 +1121,32 @@ function stepIcon(status) {
   if (status === 'skipped') return h('span', {class: 'si'}, ic('minus', 16));
   return h('span', {class: 'si'}, dotEl(''));
 }
+// Split a job log into one chunk per step ("=== [2/5] install Git" starts step 2).
+function logSections(log) {
+  const out = [];
+  let cur = null;
+  for (const line of (log || '').split('\n')) {
+    const m = /^=== \[(\d+)\/\d+\]/.exec(line);
+    if (m) { cur = +m[1] - 1; out[cur] = []; continue; }
+    if (cur != null && !/^-> (ok|FAILED)/.test(line) && !/^hint:/.test(line)) out[cur].push(line);
+  }
+  return out.map(l => (l || []).join('\n').trim());
+}
 function stepList(j) {
-  const steps = j.steps || [];
-  return h('div', {}, steps.map(st => h('div', {},
-    h('div', {class: 'srow'}, stepIcon(j.status === 'queued' ? 'queued' : st.status), h('div', {class: 'grow'},
-      h('span', {class: 'name', style: {fontWeight: 550}}, (['running'].includes(st.status) ? (ING[st.type] || '') : (VERB[st.type] || st.type)) + ' ' + st.app), st.version ? h('span', {class: 'mono muted', style: {marginLeft: '8px'}}, st.version) : null,
-      st.status === 'skipped' ? h('span', {class: 'muted', style: {marginLeft: '8px'}}, st.hint) : null)),
-    st.status === 'failed' ? h('div', {style: {marginLeft: '32px'}}, h('div', {class: 'callout bad'}, ic('alert', 16), h('div', {}, h('b', {style: {fontWeight: 600}}, 'What happened'), h('div', {}, st.hint || 'The package manager reported an error. The log below has its own message.')))) : null)));
+  const steps = j.steps || [], secs = logSections(j.log);
+  S.openSteps = S.openSteps || {};
+  return h('div', {}, steps.map((st, i) => {
+    const status = j.status === 'queued' ? 'queued' : st.status, key = j.id + ':' + i, out = secs[i] || '';
+    const open = key in S.openSteps ? S.openSteps[key] : status === 'failed' || (status === 'running' && !!out);
+    const restart = /restart/i.test(st.hint || '') && status === 'done';
+    return h('div', {},
+      h('div', {class: 'srow' + (out ? ' click' : ''), onclick: out ? () => { S.openSteps[key] = !open; render(); } : null}, stepIcon(status), h('div', {class: 'grow'},
+        h('span', {class: 'name', style: {fontWeight: 550}}, (status === 'running' ? (ING[st.type] || 'Running') : (VERB[st.type] || (st.type === 'setup' ? '' : st.type))) + ' ' + st.app), st.version ? h('span', {class: 'mono muted', style: {marginLeft: '8px'}}, st.version) : null,
+        status === 'skipped' ? h('span', {class: 'muted', style: {marginLeft: '8px'}}, st.hint) : null, restart ? h('span', {class: 'chip warn', style: {marginLeft: '8px'}}, ic('alert', 10), 'Restart needed') : null),
+        out ? h('span', {class: 'muted', style: {fontSize: '12px'}}, open ? 'Hide output' : 'Output') : null, out ? ic(open ? 'chevron-down' : 'chevron-right', 14) : null),
+      status === 'failed' ? h('div', {style: {marginLeft: '32px'}}, h('div', {class: 'callout bad'}, ic('alert', 16), h('div', {}, h('b', {style: {fontWeight: 600}}, 'What happened'), h('div', {}, st.hint || 'The package manager reported an error. Its own message is in the output.')))) : null,
+      open && out ? h('div', {class: 'slog'}, h('div', Object.assign({class: 'log'}, status === 'running' ? {'data-follow': ''} : {}), colorLog(out))) : null);
+  }));
 }
 function colorLog(text) {
   const frag = document.createDocumentFragment();
@@ -1115,9 +1172,11 @@ function jobList(jobs) {
       ic(open ? 'chevron-down' : 'chevron-right', 16)),
       open && h('div', {class: 'jb'},
         (j.steps || []).length ? stepList(j) : null,
-        h('div', {class: 'row', style: {margin: '10px 0 6px', justifyContent: 'space-between'}}, h('span', {class: 'muted', style: {fontSize: '12px', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600}}, 'Full output'),
-          j.log ? h('button', {class: 'btn sm ghost', onclick: () => copyText(j.log)}, ic('copy', 13), 'Copy') : null),
-        h('div', Object.assign({class: 'log'}, j.status === 'running' ? {'data-follow': ''} : {}), j.log ? colorLog(j.log) : (j.status === 'queued' ? 'Waiting for the device to pick this up.' : j.status === 'running' ? 'Starting…' : '(no output)')))); }));
+        h('div', {class: 'row', style: {margin: '10px 0 6px', gap: '6px'}},
+          h('button', {class: 'btn sm ghost', onclick: () => { S.fullLog = S.fullLog === j.id ? null : j.id; render(); }}, ic(S.fullLog === j.id ? 'chevron-down' : 'chevron-right', 13), 'Full log'),
+          j.log ? h('button', {class: 'btn sm ghost', onclick: () => copyText(j.log)}, ic('copy', 13), 'Copy log') : null,
+          !j.log ? h('span', {class: 'muted'}, j.status === 'queued' ? 'Waiting for the device to pick this up.' : j.status === 'running' ? 'Starting…' : '') : null),
+        S.fullLog === j.id && j.log ? h('div', Object.assign({class: 'log'}, j.status === 'running' ? {'data-follow': ''} : {}), colorLog(j.log)) : null)); }));
 }
 PAGES.activity = function () {
   const f = S.jobFilter, jobs = S.jobs.filter(j => f === 'all' || (f === 'active' && ['running', 'queued'].includes(j.status)) || (f === 'failed' && ['failed', 'halted'].includes(j.status)));
@@ -1145,7 +1204,7 @@ function profileEditor(p, presetKeys) {
       try { const body = {name: nm.value.trim(), apps: entries, script_ids: [...scripts]}; p ? await api('PUT', '/api/profiles/' + p.id, body) : await api('POST', '/api/profiles', body); m.close(); await load(); render(); toast('Profile saved'); } catch (e) { toast(e.message, 'error'); } }}, 'Save profile'));
   }});
 }
-const saveProfileFromSelection = keys => profileEditor(null, keys);
+let saveProfileFromSelection = keys => profileEditor(null, keys);
 PAGES.profiles = function () {
   return h('div', {}, topbar('Profiles', 'Reusable sets of apps, optionally pinned to exact versions', h('button', {class: 'btn primary', onclick: () => profileEditor(null)}, ic('plus', 15), 'New profile')),
     h('div', {class: 'content'}, S.profiles.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No profiles yet'), h('p', {}, 'Pick apps on the Apps page and choose "Save as profile", or create one here.'), h('button', {class: 'btn primary', onclick: () => profileEditor(null)}, 'Create a profile'))
@@ -1218,9 +1277,277 @@ PAGES.settings = function () {
         h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Access')), h('div', {class: 'pb'}, h('label', {class: 'row', style: {gap: '10px', cursor: 'pointer', alignItems: 'flex-start', flexWrap: 'nowrap'}}, reg, h('span', {}, h('b', {}, 'Allow new accounts to register'), h('div', {class: 'muted'}, 'Turn this off once your team has accounts, so strangers cannot sign up.'))))),
         h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Agents')), h('div', {class: 'pb'}, h('div', {class: 'field', style: {marginBottom: 0}}, h('label', {}, 'Check-in interval'), h('div', {class: 'row'}, poll, h('span', {class: 'muted'}, 'seconds')), h('span', {class: 'hint'}, 'How often devices ask for work. Live updates make the web page instant regardless; this is how fast a device notices new work. Agents adopt a change within one interval.')))),
         h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Data')), h('div', {class: 'pb'}, h('div', {class: 'field', style: {marginBottom: 0}}, h('label', {}, 'Keep job history'), h('div', {class: 'row'}, ret, h('span', {class: 'muted'}, 'days')), h('span', {class: 'hint'}, 'Older finished jobs are deleted automatically. The audit log keeps 365 days.'))))),
-        h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'About this server')), h('div', {class: 'pb'}, h('div', {class: 'kv'},
-          h('div', {}, 'Version'), h('div', {}, s.version), h('div', {}, 'Server time'), h('div', {}, s.server_time.replace('T', ' ')), h('div', {}, 'Time zone'), h('div', {}, s.timezone), h('div', {}, 'Accounts'), h('div', {}, s.accounts), h('div', {}, 'Your role'), h('div', {}, s.is_admin ? 'Administrator' : 'Member')))))));
+        h('div', {class: 'stack'}, monitoringSettings(s), h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'About this server')), h('div', {class: 'pb'}, h('div', {class: 'kv'},
+          h('div', {}, 'Version'), h('div', {}, s.version), h('div', {}, 'Server time'), h('div', {}, s.server_time.replace('T', ' ')), h('div', {}, 'Time zone'), h('div', {}, s.timezone), h('div', {}, 'Accounts'), h('div', {}, s.accounts), h('div', {}, 'Your role'), h('div', {}, s.is_admin ? 'Administrator' : 'Member'))))))));
 };
+</script>
+<script>
+// =====================================================================================================
+//  Windows setup actions (shared), Windows Update panel, local "Windows setup" page
+// =====================================================================================================
+const SETUP_ICON = {'Windows Update': 'sync', Explorer: 'layers', 'Look and feel': 'palette', Privacy: 'shield', 'Power and system': 'zap', 'Windows features': 'puzzle'};
+const setupGroups = () => { const g = new Map(); for (const it of S.setup) { if (!g.has(it.group)) g.set(it.group, []); g.get(it.group).push(it); } return [...g]; };
+const setupItem = id => S.setup.find(x => x.id === id);
+const setupPicks = sel => [...sel].map(([id, v]) => ({id, ...(v.args && v.args.length ? {args: v.args} : {})}));
+
+// A grouped checklist of setup actions. `sel` is a Map id -> {args}; the KB action gets its own input.
+function setupPicker(sel, onChange, opts = {}) {
+  const only = opts.kinds ? S.setup.filter(it => opts.kinds.includes(it.kind)) : S.setup;
+  const groups = setupGroups().map(([g, items]) => [g, items.filter(it => only.includes(it))]).filter(([, items]) => items.length);
+  const toggle = it => { sel.has(it.id) ? sel.delete(it.id) : sel.set(it.id, {args: []}); onChange(); };
+  return h('div', {class: 'stack'}, groups.map(([g, items]) => h('div', {class: 'panel'},
+    h('div', {class: 'ph'}, h('span', {class: 'pkgtile'}, ic(SETUP_ICON[g] || 'wrench', 15)), h('h3', {}, g), h('span', {class: 'sub'}, `${items.filter(it => sel.has(it.id)).length} of ${items.length} chosen`),
+      items.some(it => it.recommended) ? h('div', {class: 'r'}, h('button', {class: 'btn xs ghost', onclick: () => { items.filter(it => it.recommended).forEach(it => sel.has(it.id) || sel.set(it.id, {args: []})); onChange(); }}, ic('star', 12), 'Recommended')) : null),
+    h('div', {}, items.map(it => { const on = sel.has(it.id);
+      const kb = it.arg === 'kb' && on ? h('input', {class: 'input', 'data-fk': 'kb-' + it.id, placeholder: 'KB5066835, KB890830', value: (sel.get(it.id).args || []).join(', '), style: {marginTop: '8px', maxWidth: '360px', fontFamily: 'var(--mono)'},
+        onclick: e => e.stopPropagation(), oninput: e => { sel.get(it.id).args = e.target.value.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean); }}) : null;
+      return h('label', {class: 'setrow' + (on ? ' on' : '')}, h('input', {type: 'checkbox', checked: on, onchange: () => toggle(it)}),
+        h('div', {class: 'grow'}, h('div', {class: 'row', style: {gap: '8px'}}, h('span', {class: 'name'}, it.name), it.recommended ? h('span', {class: 'chip ok'}, 'Recommended') : null,
+          it.reboot === 'yes' ? h('span', {class: 'chip warn', title: 'Windows has to restart to finish'}, 'Restart') : it.reboot === 'maybe' ? h('span', {class: 'chip mute'}, 'May restart') : null,
+          it.admin ? h('span', {class: 'chip mute', title: 'Needs administrator rights (the agent service has them)'}, 'Admin') : null),
+          h('div', {class: 'muted', style: {fontSize: '12.5px', marginTop: '2px'}}, it.desc), kb)); })))));
+}
+
+function winUpdatePanel(d, opts = {}) {
+  const si = d.sysinfo || {}, wu = si.win_updates || [], scanned = si.wu_scanned;
+  const sec = wu.filter(u => u.security).length;
+  const run = (id, args, title) => runJob([{type: 'setup', items: [{id, ...(args ? {args} : {})}]}], title, 'Windows Update');
+  const busy = activeJobs().some(j => (j.steps || []).some(st => st.type === 'setup' && /^wu-/.test(st.key)) && (S.lite || j.device_id === d.id));
+  return h('div', {class: 'panel'},
+    h('div', {class: 'ph'}, h('span', {class: 'pkgtile'}, ic('sync', 15)), h('div', {}, h('h3', {}, 'Windows Update'),
+      h('div', {class: 'sub'}, [si.os_version ? 'Version ' + si.os_version : '', si.last_patch ? 'last update ' + si.last_patch : ''].filter(Boolean).join(' · '))),
+      h('div', {class: 'r'}, busy ? h('span', {class: 'chip info'}, h('span', {class: 'spin', style: {width: '10px', height: '10px'}}), 'Working…') : null,
+        h('button', {class: 'btn sm ghost', disabled: busy, onclick: () => run('wu-scan', null, 'Check for Windows updates')}, ic('search', 13), 'Check now'))),
+    !scanned ? h('div', {class: 'pb muted'}, opts.offline ? 'Not checked yet.' : 'Checking with Windows Update in the background. This can take a minute.')
+    : wu.length === 0 ? h('div', {class: 'pb row'}, h('span', {class: 'chip ok'}, ic('check', 11), 'Up to date'), h('span', {class: 'muted'}, 'Checked ' + ago(scanned)))
+    : h('div', {},
+      wu.slice(0, 8).map(u => h('div', {class: 'list-row'}, h('div', {class: 'grow', style: {minWidth: 0}}, h('div', {class: 'name', style: {fontWeight: 560}}, u.title),
+          h('div', {class: 'mono muted', style: {fontSize: '11.5px'}}, [u.kb, u.size_mb ? u.size_mb + ' MB' : ''].filter(Boolean).join(' · '))),
+        u.security ? h('span', {class: 'chip warn'}, 'Security') : null,
+        u.kb ? h('button', {class: 'btn xs ghost', disabled: busy, title: 'Install only this update', onclick: () => run('wu-kb', u.kb.split(','), 'Install ' + u.kb)}, 'Install') : null)),
+      h('div', {class: 'pb row', style: {borderTop: '1px solid var(--line2)', justifyContent: 'space-between'}},
+        h('span', {class: 'muted'}, `${plural(wu.length, 'update')} waiting${sec ? `, ${sec} security` : ''} · checked ${ago(scanned)}`),
+        h('div', {class: 'row', style: {gap: '6px'}}, sec && sec < wu.length ? h('button', {class: 'btn sm', disabled: busy, onclick: () => run('wu-security', null, 'Install security updates')}, 'Security only') : null,
+          h('button', {class: 'btn sm primary', disabled: busy, onclick: () => run('wu-all', null, 'Install Windows updates')}, ic('download', 13), 'Install all')))));
+}
+
+PAGES.setup = function () {
+  const d = S.devices[0]; if (!d) return h('div', {});
+  const sel = S.setupSel, n = sel.size;
+  const rerender = () => render();
+  const reboot = [...sel.keys()].map(setupItem).filter(it => it && it.reboot === 'yes');
+  return h('div', {}, topbar('Windows setup', 'Common settings and Windows features, applied in one go. Nothing changes until you press Apply.'),
+    h('div', {class: 'content'}, h('div', {class: 'apps'},
+      h('div', {class: 'stack'}, winUpdatePanel(d), setupPicker(sel, rerender, {kinds: ['tweak', 'feature']})),
+      h('div', {class: 'panel selpanel open'},
+        h('div', {class: 'ph'}, h('h3', {}, 'To apply'), h('span', {class: 'badge ' + (n ? 'info' : '')}, n), n ? h('button', {class: 'btn sm ghost', style: {marginLeft: 'auto'}, onclick: () => { sel.clear(); render(); }}, 'Clear') : null),
+        n === 0 ? h('div', {class: 'pb'}, h('div', {class: 'sec'}, 'Tick the settings you want.'), h('div', {class: 'note', style: {marginTop: '4px'}}, 'Not sure? Press "Recommended" in a group: those are safe for everyone.'))
+          : h('div', {class: 'list'}, [...sel.keys()].map(id => { const it = setupItem(id); return it ? h('div', {class: 'selrow'}, h('span', {class: 'pkgtile'}, ic(SETUP_ICON[it.group] || 'wrench', 14)), h('span', {class: 'nm'}, it.name),
+              h('button', {class: 'btn ghost icon sm', title: 'Remove', onclick: () => { sel.delete(id); render(); }}, ic('x', 14))) : null; })),
+        h('div', {class: 'pb', style: {borderTop: '1px solid var(--line2)'}},
+          reboot.length ? h('div', {class: 'callout', style: {marginBottom: '12px'}}, ic('alert', 16), h('div', {}, `Windows needs a restart to finish: ${reboot.map(x => x.name).join(', ')}.`)) : null,
+          h('button', {class: 'btn primary lg block', disabled: !n, onclick: async () => { const items = setupPicks(sel);
+            const r = await runJob([{type: 'setup', items}], 'Windows setup', 'Setup'); if (r) { sel.clear(); render(); } }}, ic('play', 15), n ? `Apply ${plural(n, 'setting')}` : 'Apply'),
+          h('div', {class: 'note', style: {marginTop: '10px'}}, 'Tip: tick "Create a restore point" first so you can roll back.'))))));
+};
+</script>
+<script>
+// =====================================================================================================
+//  server pages: monitoring, events
+// =====================================================================================================
+const cellTone = v => v == null ? 'none' : v >= 0.98 ? 'up' : v >= 0.5 ? 'part' : v > 0 ? 'low' : 'down';
+PAGES.monitoring = function () {
+  const m = S.monitor;
+  if (!m) return h('div', {}, topbar('Monitoring', 'Loading…'), h('div', {class: 'content'}, h('div', {class: 'panel skel', style: {height: '240px'}})));
+  const sites = [...new Set(m.devices.map(d => d.meta.site).filter(Boolean))].sort();
+  const list = m.devices.filter(d => !S.devSite || d.meta.site === S.devSite);
+  const on = list.filter(d => d.online).length, ups = list.map(d => d.uptime_pct).filter(v => v != null);
+  const avg = ups.length ? ups.reduce((a, b) => a + b, 0) / ups.length : null;
+  const fmtCol = i => { const t = new Date((m.start + i * m.step) * 1000); return m.range === '24h' ? t.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : t.toLocaleString([], {month: 'short', day: 'numeric', ...(m.range === '7d' ? {hour: '2-digit'} : {})}); };
+  const ncol = (list[0] && list[0].cols.length) || 0;
+  return h('div', {}, topbar('Monitoring', 'Which devices are reachable, and how reliably they check in',
+      [h('div', {class: 'seg'}, [['24h', '24 hours'], ['7d', '7 days'], ['30d', '30 days']].map(([id, l]) => h('button', {class: S.monRange === id ? 'on' : '', onclick: async () => { S.monRange = id; await load(); render(); }}, l))),
+       h('a', {class: 'btn', href: '#/settings', title: 'Prometheus and Grafana'}, ic('activity', 15), 'Grafana')]),
+    h('div', {class: 'content'},
+      h('div', {class: 'stats'},
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, h('span', {class: 'ic ok'}, ic('wifi', 15)), 'Online now'), h('div', {class: 'v'}, on, h('small', {}, '/ ' + list.length)), h('div', {class: 'd'}, 'checked in within 90 s')),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, h('span', {class: 'ic ' + (list.length - on ? 'warn' : '')}, ic('alert', 15)), 'Offline'), h('div', {class: 'v', style: {color: list.length - on ? 'var(--warn-text)' : ''}}, list.length - on), h('div', {class: 'd'}, list.length - on ? 'not reachable right now' : 'everything is reachable')),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, h('span', {class: 'ic info'}, ic('uptime', 15)), 'Average availability'), h('div', {class: 'v'}, avg == null ? '—' : avg.toFixed(avg >= 99.95 ? 0 : 1) + '%'), h('div', {class: 'd'}, 'over the last ' + {['24h']: '24 hours', ['7d']: '7 days', ['30d']: '30 days'}[m.range])),
+        h('div', {class: 'panel stat'}, h('div', {class: 'l'}, h('span', {class: 'ic'}, ic('server', 15)), 'Least reliable'), (() => { const w = list.filter(d => d.uptime_pct != null).sort((a, b) => a.uptime_pct - b.uptime_pct)[0];
+          return [h('div', {class: 'v', style: {fontSize: '20px', marginTop: '16px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}, w ? w.name : '—'), h('div', {class: 'd'}, w ? w.uptime_pct + '% available' : 'no data yet')]; })())),
+      h('div', {class: 'panel'},
+        h('div', {class: 'ph'}, h('h3', {}, 'Availability'), h('span', {class: 'sub'}, 'Share of 5-minute check-ins received in each ' + {['24h']: 'hour', ['7d']: '6 hours', ['30d']: 'day'}[m.range]),
+          h('div', {class: 'r'}, sites.length ? h('select', {class: 'select', style: {width: '160px', height: '30px'}, onchange: e => { S.devSite = e.target.value; render(); }}, h('option', {value: ''}, 'All sites'), sites.map(x => h('option', {value: x, selected: S.devSite === x}, x))) : null,
+            h('div', {class: 'legend'}, [['up', 'Online'], ['part', 'Partly'], ['low', 'Mostly offline'], ['down', 'Offline'], ['none', 'No data']].map(([c, l]) => h('span', {}, h('i', {class: 'cell ' + c}), l))))),
+        list.length === 0 ? h('div', {class: 'empty'}, 'No devices yet.') :
+        h('div', {class: 'tbl-wrap'}, h('table', {class: 'tbl mon'},
+          h('thead', {}, h('tr', {}, h('th', {}, 'Device'), h('th', {}, h('div', {class: 'axis'}, h('span', {}, fmtCol(0)), h('span', {}, fmtCol(Math.floor(ncol / 2))), h('span', {}, 'now'))), h('th', {class: 'r'}, 'Available'), h('th', {}, 'Last seen'))),
+          h('tbody', {}, list.map(d => h('tr', {class: 'click', onclick: () => go('devices/' + d.id)},
+            h('td', {}, h('div', {class: 'row', style: {gap: '8px', flexWrap: 'nowrap'}}, dotEl(d.online ? 'ok' : 'bad'), h('div', {style: {minWidth: 0}}, h('div', {class: 'name'}, d.name),
+              h('div', {class: 'muted', style: {fontSize: '12px'}}, [d.meta.site, d.meta.role, (d.ips || [])[0]].filter(Boolean).join(' · '))))),
+            h('td', {style: {width: '60%'}}, h('div', {class: 'cells'}, d.cols.map((v, i) => h('i', {class: 'cell ' + cellTone(v), title: `${fmtCol(i)}: ${v == null ? 'no data' : Math.round(v * 100) + '% of check-ins'}`})))),
+            h('td', {class: 'r mono', style: {color: d.uptime_pct != null && d.uptime_pct < 95 ? 'var(--warn-text)' : ''}}, d.uptime_pct == null ? '—' : d.uptime_pct + '%'),
+            h('td', {class: 'muted', style: {whiteSpace: 'nowrap'}}, d.online ? 'now' : ago(d.last_seen)))))))),
+      h('div', {class: 'note', style: {marginTop: '12px'}}, 'Openite records a device as reachable when its agent checks in. For CPU, memory and disk graphs over time, connect Prometheus and Grafana in Settings.')));
+};
+
+const EV_ICON = {'device.online': 'wifi', 'device.offline': 'alert', 'device.enrolled': 'plus', 'job.done': 'ok', 'job.failed': 'fail', 'metrics.token': 'key'};
+PAGES.events = function () {
+  const dn = id => (S.devices.find(d => d.id === id) || {}).name;
+  const days = new Map();
+  for (const e of S.events) { const k = new Date(e.ts * 1000).toLocaleDateString([], {weekday: 'long', month: 'long', day: 'numeric'}); if (!days.has(k)) days.set(k, []); days.get(k).push(e); }
+  return h('div', {}, topbar('Events', 'What happened across your devices: who came and went, which jobs failed'),
+    h('div', {class: 'content'},
+      h('div', {class: 'toolbar'}, h('div', {class: 'seg'}, [['', 'All'], ['error', 'Errors'], ['warning', 'Warnings'], ['info', 'Info']].map(([id, l]) =>
+        h('button', {class: S.evLevel === id ? 'on' : '', onclick: async () => { S.evLevel = id; await load(); render(); }}, l)))),
+      S.events.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'Nothing yet'), h('p', {}, 'Devices joining, going offline and jobs finishing show up here.'))
+      : [...days].map(([day, evs]) => h('div', {style: {marginBottom: '18px'}}, h('div', {class: 'cat', style: {marginTop: 0}}, day),
+          h('div', {class: 'panel'}, evs.map(e => h('div', {class: 'list-row ev ' + e.level},
+            h('span', {class: 'evi'}, ic(EV_ICON[e.kind] || 'info', 15)),
+            h('div', {class: 'grow'}, h('div', {}, e.message), h('div', {class: 'muted', style: {fontSize: '12px'}}, e.kind)),
+            e.device_id && dn(e.device_id) ? h('a', {class: 'btn xs ghost', href: '#/devices/' + e.device_id}, dn(e.device_id), ic('chevron-right', 12)) : null,
+            h('span', {class: 'muted mono', style: {fontSize: '12px', whiteSpace: 'nowrap'}}, new Date(e.ts * 1000).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'})))))))));
+};
+</script>
+<script>
+// =====================================================================================================
+//  device record (NetBox-style), profile builder, monitoring settings
+// =====================================================================================================
+const STATUS_TONE = {active: 'ok', planned: 'info', staged: 'info', maintenance: 'warn', decommissioning: 'warn', retired: ''};
+const STATUSES = ['active', 'planned', 'staged', 'maintenance', 'decommissioning', 'retired'];
+const statusBadge = st => badge((st || 'active')[0].toUpperCase() + (st || 'active').slice(1), STATUS_TONE[st || 'active']);
+const metaList = key => [...new Set(S.devices.map(d => (d.meta || {})[key]).filter(Boolean))].sort();
+
+function deviceRecord(d) {
+  S.recDraft = S.recDraft || {};   // edits survive live refreshes until saved
+  const m = S.recDraft[d.id] = S.recDraft[d.id] || JSON.parse(JSON.stringify(Object.assign({custom: []}, d.meta || {}))), si = d.sysinfo || {};
+  const custom = m.custom = m.custom || [];
+  const inp = (key, ph, type = 'text', list) => h('input', {class: 'input', type, value: m[key] || '', placeholder: ph, list: list || null, 'data-fk': 'rec-' + key, oninput: e => { m[key] = e.target.value; }});
+  const fields = h('div', {class: 'formgrid'},
+    h('div', {class: 'field'}, h('label', {}, 'Status'), h('select', {class: 'select', onchange: e => { m.status = e.target.value; }}, STATUSES.map(x => h('option', {value: x, selected: (m.status || 'active') === x}, x[0].toUpperCase() + x.slice(1))))),
+    h('div', {class: 'field'}, h('label', {}, 'Role'), inp('role', 'e.g. Workstation, File server', 'text', 'dl-role')),
+    h('div', {class: 'field'}, h('label', {}, 'Site'), inp('site', 'e.g. Home, Office Warsaw', 'text', 'dl-site')),
+    h('div', {class: 'field'}, h('label', {}, 'Location'), inp('location', 'e.g. Rack 1, U12 / Kitchen')),
+    h('div', {class: 'field'}, h('label', {}, 'Owner'), inp('owner', 'Person or team')),
+    h('div', {class: 'field'}, h('label', {}, 'Asset tag'), inp('asset_tag', 'e.g. IT-0042')),
+    h('div', {class: 'field'}, h('label', {}, 'Purchased'), inp('purchased', '', 'date')),
+    h('div', {class: 'field'}, h('label', {}, 'Warranty until'), inp('warranty_until', '', 'date')),
+    h('div', {class: 'field', style: {gridColumn: '1 / -1'}}, h('label', {}, 'Description'), inp('description', 'What this machine is for')),
+    h('datalist', {id: 'dl-role'}, metaList('role').map(v => h('option', {value: v}))), h('datalist', {id: 'dl-site'}, metaList('site').map(v => h('option', {value: v}))));
+  const cbox = h('div', {class: 'stack', style: {gap: '8px'}});
+  const drawCustom = () => cbox.replaceChildren(...custom.map((c, i) => h('div', {class: 'row', style: {flexWrap: 'nowrap', gap: '8px'}},
+      h('input', {class: 'input', style: {width: '38%'}, placeholder: 'Field', value: c.key, oninput: e => { c.key = e.target.value; }}),
+      h('input', {class: 'input', placeholder: 'Value', value: c.value, oninput: e => { c.value = e.target.value; }}),
+      h('button', {class: 'btn icon sm ghost', title: 'Remove', onclick: () => { custom.splice(i, 1); drawCustom(); }}, ic('x', 14)))),
+    h('button', {class: 'btn sm ghost', style: {alignSelf: 'flex-start'}, onclick: () => { custom.push({key: '', value: ''}); drawCustom(); }}, ic('plus', 13), 'Add field'));
+  drawCustom();
+  const save = async () => {
+    const meta = {...m, custom: custom.filter(c => c.key.trim())};
+    try { await api('PUT', '/api/devices/' + d.id, {meta}); delete S.recDraft[d.id]; await load(); render(); toast('Record saved'); } catch (e) { toast(e.message, 'error'); }
+  };
+  const facts = [['Serial number', si.serial], ['Manufacturer', clean(si.maker)], ['Model', clean(si.model)], ['Operating system', si.os], ['Version', si.os_version], ['Edition', si.edition],
+    ['Last Windows update', si.last_patch], ['Processor', si.cpu], ['Memory', si.mem_total_mb ? gb(si.mem_total_mb) : ''], ['System disk', si.disk_total_gb ? si.disk_total_gb + ' GB' : ''],
+    ['IP addresses', (si.ips || []).join(', ')], ['Agent', d.agent_version && 'Openite ' + d.agent_version], ['Enrolled', d.created ? clock(d.created) : '']].filter(([, v]) => v);
+  return h('div', {class: 'grid2'},
+    h('div', {class: 'stack'}, h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Record'), h('span', {class: 'sub'}, 'Your own inventory details')), h('div', {class: 'pb'}, fields)),
+      h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Custom fields'), h('span', {class: 'sub'}, 'Anything else worth knowing: VLAN, licence key ID, contract…')), h('div', {class: 'pb'}, cbox)),
+      h('div', {class: 'row'}, h('button', {class: 'btn primary', onclick: save}, 'Save record'))),
+    h('div', {class: 'panel', style: {alignSelf: 'start'}}, h('div', {class: 'ph'}, h('h3', {}, 'Detected'), h('span', {class: 'sub'}, 'Reported by the agent, updated automatically')),
+      h('div', {class: 'pb', style: {paddingTop: '6px', paddingBottom: '6px'}}, h('div', {class: 'kv'}, facts.flatMap(([k, v]) => [h('div', {}, k), h('div', {class: /Serial|Version|IP/.test(k) ? 'mono' : ''}, v)])))));
+}
+function recordSummary(d) {
+  const m = d.meta || {}, rows = [['Status', statusBadge(m.status)], ['Role', m.role], ['Site', [m.site, m.location].filter(Boolean).join(' · ')], ['Owner', m.owner], ['Asset tag', m.asset_tag],
+    ['Warranty', m.warranty_until ? (new Date(m.warranty_until) < new Date() ? h('span', {style: {color: 'var(--bad)'}}, 'expired ' + m.warranty_until) : 'until ' + m.warranty_until) : ''],
+    ...(m.custom || []).map(c => [c.key, c.value])].filter(([, v]) => v);
+  return h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Record'), h('div', {class: 'r'}, h('button', {class: 'btn sm ghost', onclick: () => { S.devTab = 'record'; render(); }}, ic('edit', 13), 'Edit'))),
+    rows.length > 1 ? h('div', {class: 'pb', style: {paddingTop: '6px', paddingBottom: '6px'}}, h('div', {class: 'kv'}, rows.flatMap(([k, v]) => [h('div', {}, k), h('div', {}, v)])))
+      : h('div', {class: 'pb muted'}, 'No role, site or owner yet. ', h('a', {href: '#', onclick: e => { e.preventDefault(); S.devTab = 'record'; render(); }}, 'Fill in the record')));
+}
+
+// ---------- profile builder (full page)
+function profileDraft(id) {
+  if (S.pdraft && S.pdraft.key === id) return S.pdraft;
+  const p = id === 'new' ? null : S.profiles.find(x => x.id === +id);
+  const seed = id === 'new' && S.pseed ? S.pseed : null; S.pseed = null;
+  S.pdraft = {key: id, id: p ? p.id : null, name: p ? p.name : '', description: p ? p.description || '' : '', tab: 'apps', q: '', cat: 'all',
+    apps: new Map((p ? p.apps : (seed || []).map(k => ({key: k, version: ''}))).map(e => [e.key, e.version || ''])),
+    setup: new Map(((p && p.setup) || []).map(x => [x.id, {args: x.args || []}])), scripts: new Set(p ? p.script_ids : []), dirty: false};
+  return S.pdraft;
+}
+PAGES.profile = function () {
+  const id = routeOf().id, P = profileDraft(id);
+  if (id !== 'new' && !P.id) return h('div', {}, topbar('Profile not found', null, h('a', {class: 'btn', href: '#/profiles'}, 'Back to profiles')));
+  const touch = () => { P.dirty = true; render(); };
+  const q = P.q.toLowerCase();
+  const apps = S.catalog.filter(a => (P.cat === 'all' || a.category === P.cat) && (!q || (a.name + ' ' + a.key + ' ' + a.category).toLowerCase().includes(q)));
+  const packs = S.packs.map(p => ({p, av: p.apps.filter(k => catOf(k))})).filter(x => x.av.length);
+  const tabs = [['apps', 'Apps', P.apps.size], ['setup', 'Windows setup', P.setup.size], ['scripts', 'Scripts', P.scripts.size]];
+  let body;
+  if (P.tab === 'apps') body = h('div', {},
+    h('div', {class: 'presets'}, packs.map(({p, av}) => { const n = av.filter(k => P.apps.has(k)).length, on = n === av.length;
+      return h('button', {class: 'preset' + (on ? ' on' : ''), title: av.map(k => catOf(k).name).join(', '), onclick: () => { av.forEach(k => on ? P.apps.delete(k) : P.apps.has(k) || P.apps.set(k, '')); touch(); }},
+        ic(PACK_ICON[p.id] || 'package', 15), p.name, n > 0 && n < av.length && h('span', {class: 'part'}, `${n}/${av.length}`)); })),
+    h('div', {class: 'toolbar'}, h('div', {class: 'search', style: {flex: '1 1 220px'}}, ic('search', 15), h('input', {class: 'input', style: {width: '100%'}, 'data-fk': 'psearch', placeholder: 'Search apps', value: P.q, oninput: e => { P.q = e.target.value; render(); }})),
+      h('select', {class: 'select', style: {width: '200px'}, onchange: e => { P.cat = e.target.value; render(); }}, h('option', {value: 'all'}, 'All categories'), allCats().map(c => h('option', {value: c, selected: P.cat === c}, c)))),
+    apps.length === 0 ? h('div', {class: 'panel empty'}, 'No apps match.') : h('div', {class: 'cards'}, apps.map(a => { const on = P.apps.has(a.key);
+      return h('div', {class: 'card' + (on ? ' sel' : ''), tabindex: 0, role: 'checkbox', 'aria-checked': on, onclick: () => { on ? P.apps.delete(a.key) : P.apps.set(a.key, ''); touch(); },
+        onkeydown: e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.currentTarget.click(); } }},
+        h('div', {class: 'tw'}, tile(a)), h('div', {class: 'mt'}, h('div', {class: 'nm'}, a.name), h('div', {class: 'sb'}, a.category)), h('span', {class: 'tick'}, ic('check', 12))); })));
+  else if (P.tab === 'setup') body = h('div', {}, h('div', {class: 'callout info', style: {marginBottom: '16px'}}, ic('info', 16), h('div', {}, 'Windows only: other devices skip these steps. A restore point always runs first; the rest run after the apps are installed.')),
+    setupPicker(P.setup, touch));
+  else body = S.scripts.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No scripts yet'), h('p', {}, 'Write setup scripts on the Scripts page, then add them here.'), h('a', {class: 'btn', href: '#/scripts'}, 'Go to Scripts'))
+    : h('div', {class: 'panel'}, S.scripts.map(sc => h('label', {class: 'setrow' + (P.scripts.has(sc.id) ? ' on' : '')}, h('input', {type: 'checkbox', checked: P.scripts.has(sc.id), onchange: () => { P.scripts.has(sc.id) ? P.scripts.delete(sc.id) : P.scripts.add(sc.id); touch(); }}),
+        h('div', {class: 'grow'}, h('div', {class: 'name'}, sc.name), h('div', {class: 'muted mono', style: {fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '640px'}}, sc.body.split('\n')[0])), badge(sc.shell))));
+  const save = async () => {
+    if (!P.name.trim()) { toast('Give the profile a name', 'error'); document.querySelector('[data-fk="pname"]').focus(); return; }
+    const bad = [...P.setup].find(([k, v]) => (setupItem(k) || {}).arg === 'kb' && !(v.args || []).length);
+    if (bad) { toast('Enter at least one KB number, or untick "' + setupItem(bad[0]).name + '"', 'error'); P.tab = 'setup'; render(); return; }
+    const body = {name: P.name.trim(), description: P.description, apps: [...P.apps].map(([key, version]) => ({key, version})), setup: setupPicks(P.setup), script_ids: [...P.scripts]};
+    try { if (P.id) await api('PUT', '/api/profiles/' + P.id, body); else P.id = (await api('POST', '/api/profiles', body)).id;
+      P.dirty = false; S.pdraft = null; await load(); toast('Profile saved'); go('profiles'); } catch (e) { toast(e.message, 'error'); }
+  };
+  const verIn = (k, v) => h('input', {class: 'input', style: {width: '96px', height: '26px', fontFamily: 'var(--mono)', fontSize: '12px'}, placeholder: 'latest', value: v, title: 'Exact version (optional)', onclick: e => e.stopPropagation(),
+    oninput: e => { P.apps.set(k, e.target.value.trim()); P.dirty = true; }});
+  const side = h('div', {class: 'panel selpanel open'},
+    h('div', {class: 'pb', style: {borderBottom: '1px solid var(--line2)'}},
+      h('div', {class: 'field'}, h('label', {}, 'Name'), h('input', {class: 'input', 'data-fk': 'pname', placeholder: 'e.g. Office PC, Gaming rig', value: P.name, oninput: e => { P.name = e.target.value; P.dirty = true; }})),
+      h('div', {class: 'field', style: {marginBottom: 0}}, h('label', {}, 'Description ', h('span', {class: 'muted', style: {fontWeight: 400}}, '(optional)')), h('input', {class: 'input', placeholder: 'Who or what it is for', value: P.description, oninput: e => { P.description = e.target.value; P.dirty = true; }}))),
+    h('div', {class: 'summary', style: {paddingBottom: '10px'}}, h('span', {class: 'chip info'}, plural(P.apps.size, 'app')), h('span', {class: 'chip info'}, plural(P.setup.size, 'setting')), h('span', {class: 'chip info'}, plural(P.scripts.size, 'script'))),
+    h('div', {class: 'list', style: {borderTop: '1px solid var(--line2)'}},
+      P.apps.size + P.setup.size + P.scripts.size === 0 ? h('div', {class: 'note', style: {padding: '12px 18px'}}, 'Pick apps, Windows settings and scripts on the left.') : null,
+      [...P.apps].map(([k, v]) => { const a = catOf(k); return a ? h('div', {class: 'selrow'}, tile(a, 's'), h('span', {class: 'nm'}, a.name), verIn(k, v), h('button', {class: 'btn ghost icon sm', title: 'Remove', onclick: () => { P.apps.delete(k); touch(); }}, ic('x', 14))) : null; }),
+      [...P.setup.keys()].map(k => { const it = setupItem(k); return it ? h('div', {class: 'selrow'}, h('span', {class: 'pkgtile'}, ic(SETUP_ICON[it.group] || 'wrench', 14)), h('span', {class: 'nm'}, it.name), h('button', {class: 'btn ghost icon sm', title: 'Remove', onclick: () => { P.setup.delete(k); touch(); }}, ic('x', 14))) : null; }),
+      [...P.scripts].map(sid => { const sc = S.scripts.find(x => x.id === sid); return sc ? h('div', {class: 'selrow'}, h('span', {class: 'pkgtile'}, ic('terminal', 14)), h('span', {class: 'nm'}, sc.name), h('button', {class: 'btn ghost icon sm', title: 'Remove', onclick: () => { P.scripts.delete(sid); touch(); }}, ic('x', 14))) : null; })),
+    h('div', {class: 'pb', style: {borderTop: '1px solid var(--line2)'}}, h('button', {class: 'btn primary lg block', onclick: save}, ic('check', 15), P.id ? 'Save changes' : 'Create profile'),
+      h('div', {class: 'note', style: {marginTop: '10px'}}, 'Order on a device: restore point, apps, Windows settings, then scripts.')));
+  return h('div', {}, topbar(P.id ? 'Edit profile' : 'New profile', 'Everything a device should get, in one reusable set', h('a', {class: 'btn ghost', href: '#/profiles', onclick: e => { if (P.dirty && !confirm('Discard your changes?')) e.preventDefault(); else S.pdraft = null; }}, 'Cancel'),
+      h('div', {class: 'crumb'}, h('a', {href: '#/profiles'}, 'Profiles'), ic('chevron-right', 13), P.name || 'New profile')),
+    h('div', {class: 'content'}, h('div', {class: 'apps'}, h('div', {}, h('div', {class: 'tabs'}, tabs.map(([t, l, n]) => h('a', {class: P.tab === t ? 'on' : '', onclick: () => { P.tab = t; render(); }}, l, n ? h('span', {class: 'badge info', style: {marginLeft: '6px', height: '18px'}}, n) : null))), body), side)));
+};
+PAGES.profiles = function () {
+  return h('div', {}, topbar('Profiles', 'Reusable sets of apps, Windows settings and scripts', h('a', {class: 'btn primary', href: '#/profiles/new'}, ic('plus', 15), 'New profile')),
+    h('div', {class: 'content'}, S.profiles.length === 0 ? h('div', {class: 'panel empty'}, h('h3', {}, 'No profiles yet'), h('p', {}, 'A profile is a recipe for a machine: "Office PC", "Kids laptop", "Dev workstation".'), h('a', {class: 'btn primary', href: '#/profiles/new'}, 'Create your first profile'))
+      : h('div', {class: 'grid2'}, S.profiles.map(p => h('div', {class: 'panel pcard'},
+        h('div', {class: 'ph'}, h('div', {class: 'grow'}, h('h3', {}, p.name), p.description ? h('div', {class: 'sub'}, p.description) : null), h('div', {class: 'r'},
+          h('a', {class: 'btn sm', href: '#/profiles/' + p.id}, ic('edit', 13), 'Edit'),
+          h('button', {class: 'btn sm ghost danger', title: 'Delete', onclick: async () => { if (await confirmDialog('Delete ' + p.name + '?', 'Auto-sync rules that use it are removed too.', 'Delete', true)) { await api('DELETE', '/api/profiles/' + p.id); await load(); render(); } }}, ic('trash', 14)))),
+        h('div', {class: 'pb'}, h('div', {class: 'row', style: {gap: '4px', marginBottom: '12px'}}, p.apps.slice(0, 14).map(e => { const a = catOf(e.key); return a ? h('span', {title: a.name + (e.version ? ' ' + e.version : '')}, tile(a, 's')) : null; }),
+            p.apps.length > 14 ? h('span', {class: 'muted', style: {marginLeft: '4px'}}, '+' + (p.apps.length - 14)) : null),
+          h('div', {class: 'row', style: {gap: '6px'}}, h('span', {class: 'chip mute'}, plural(p.apps.length, 'app')), h('span', {class: 'chip mute'}, plural((p.setup || []).length, 'Windows setting')), h('span', {class: 'chip mute'}, plural(p.script_ids.length, 'script')))),
+        h('div', {class: 'pb', style: {borderTop: '1px solid var(--line2)', padding: '12px 18px'}}, h('button', {class: 'btn sm', onclick: () => devicePickerThen(() => runJob([{type: 'profile', profile_id: p.id}], 'Profile: ' + p.name, 'Profile'))}, ic('play', 13), 'Apply to devices…')))))));
+};
+saveProfileFromSelection = keys => { S.pseed = keys; S.pdraft = null; go('profiles/new'); };
+
+function monitoringSettings(s) {
+  const out = h('div');
+  const make = async () => { if (s.metrics && !(await confirmDialog('Replace the metrics token?', 'Prometheus stops working until you give it the new token.', 'Replace'))) return;
+    try { const r = await api('POST', '/api/metrics-token'); out.replaceChildren(h('div', {class: 'field'}, h('label', {}, 'Your token (shown once)'), codeBox(r.token)),
+      h('div', {class: 'field'}, h('label', {}, 'Prometheus scrape config'), codeBox(`- job_name: openite\n  metrics_path: /metrics\n  authorization:\n    credentials: ${r.token}\n  static_configs:\n    - targets: ["${location.host}"]`))); s.metrics = true; }
+    catch (e) { toast(e.message, 'error'); } };
+  out.append(h('p', {class: 'sec', style: {marginBottom: '12px'}}, 'Openite publishes device health at ', h('code', {}, '/metrics'), ' for Prometheus. The repository has a ready Prometheus + Grafana setup with an Openite dashboard in ', h('code', {}, 'deploy/monitoring'), '.'),
+    h('div', {class: 'row'}, s.metrics ? badge('Token active', 'ok') : badge('Not set up'), h('button', {class: 'btn sm', disabled: !s.is_admin, onclick: make}, ic('key', 13), s.metrics ? 'Replace token' : 'Create metrics token')));
+  return h('div', {class: 'panel'}, h('div', {class: 'ph'}, h('h3', {}, 'Monitoring (Prometheus / Grafana)')), h('div', {class: 'pb'}, out));
+}
 </script>
 <script>
 // =====================================================================================================

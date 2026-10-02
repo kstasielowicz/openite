@@ -144,7 +144,7 @@ func (u *localUI) sync() {
 
 	inv := u.b.Inventory(u.syncStage)
 	u.syncStage("Reading system details")
-	sys := collectSysInfo()
+	sys := withWindowsUpdates(collectSysInfo())
 	sysMu.Lock() // share the result with check-ins
 	sysCache, sysAt = sys, time.Now()
 	sysMu.Unlock()
@@ -264,7 +264,7 @@ func (u *localUI) device() map[string]any {
 	sort.Slice(pkgs, func(i, j int) bool {
 		return strings.ToLower(pkgs[i]["name"].(string)) < strings.ToLower(pkgs[j]["name"].(string))
 	})
-	sys := u.sys
+	sys := withWindowsUpdates(u.sys)
 	if sys.BootUnix > 0 {
 		sys.UptimeSec = time.Now().Unix() - sys.BootUnix
 	}
@@ -348,6 +348,7 @@ func (u *localUI) handler() http.Handler {
 		}
 		writeJSON(w, 200, keys)
 	})
+	mux.HandleFunc("/api/setup", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, setupView()) })
 	mux.HandleFunc("/api/packs", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, catalog.Packs()) })
 	mux.HandleFunc("/icons/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/icons/")
@@ -426,6 +427,7 @@ func (u *localUI) handler() http.Handler {
 				Type     string            `json:"type"`
 				Apps     any               `json:"apps"`
 				Versions map[string]string `json:"versions"`
+				Items    []setupPick       `json:"items"`
 			} `json:"steps"`
 		}
 		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body) != nil || len(body.Steps) == 0 {
@@ -436,8 +438,16 @@ func (u *localUI) handler() http.Handler {
 		for _, s := range body.Steps {
 			switch s.Type {
 			case "install", "upgrade", "uninstall", "pin", "unpin":
+			case "setup":
+				st, err := setupSteps(s.Items)
+				if err != nil {
+					fail(w, 400, err.Error())
+					return
+				}
+				steps = append(steps, st...)
+				continue
 			default:
-				fail(w, 400, "this mode supports install, update, uninstall and hold only")
+				fail(w, 400, "this mode supports install, update, uninstall, hold and setup only")
 				return
 			}
 			if s.Apps == "all" && s.Type == "upgrade" {
@@ -569,6 +579,9 @@ func cmdUI(args []string) {
 	srv := &http.Server{Handler: u.handler(), ReadHeaderTimeout: 10 * time.Second}
 	go func() { die("%v", srv.Serve(ln)) }()
 	go u.worker()
+	wuMu.Lock()
+	wuChanged = u.hub.notify
+	wuMu.Unlock()
 
 	// Read the machine first, with live progress, so the page opens fully populated.
 	banner("local interface")

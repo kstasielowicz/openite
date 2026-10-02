@@ -83,14 +83,16 @@ A reusable key doesn't expire. Treat it like a password.
 | Want to… | Use |
 |---|---|
 | Act on a group | **Tags** (`#kitchen`, `#prod`). Devices tab → Tags. "Select" chips pick all devices with a tag. |
-| Install the same set everywhere | **Profiles** (Install tab → *Save as profile*), then *Apply*. |
+| Install the same set everywhere | **Profiles**: a full-page builder with apps (pick a pack or search), **Windows setup** (tweaks, optional features, Windows Update) and scripts. Then *Apply to devices* or use it in Auto-sync. |
+| Set Windows up the same way everywhere | **Windows setup** actions inside a profile: show file extensions, turn off ads, dark mode, power plan, Remote Desktop, WSL, Hyper-V, Sandbox, .NET 3.5, OpenSSH server, remove SMB1, a restore point first, and Windows Update (all, security only, or specific KB numbers). Only action ids travel to devices; the PowerShell is built into the agent. |
 | Keep machines identical automatically | **Auto-sync** (Advanced): "devices tagged X should have profile Y". See [AUTO-UPDATES.md](AUTO-UPDATES.md). |
 | Update everything on a schedule | **Scheduled updates** (Advanced → Auto-sync tab). |
 | Run a setup script | **Scripts** (PowerShell / bash / cmd), attach to a profile or run on selected devices. |
 | Pin an exact version | Give an app a version in a **Profile**, or add it to your selection from the app's ⓘ details. Devices install exactly that version. |
 | Stop an app from updating | **Hold** in the app details or a device's **Software** tab. Held apps are skipped by "update everything" and scheduled updates. |
 | Roll out safely | Automatic for 4+ devices: canary ~10% → ~40% → rest, **halts** if >20% of finished devices fail. |
-| See what happened | **Activity** (per-device logs) and **Audit log**. |
+| See what happened | **Activity** (each step with its own output; failed steps open by themselves), **Events** (devices joining, going offline, coming back, jobs failing) and **Audit log** (who changed what). |
+| See what is reachable | **Monitoring**: online now, availability per hour/6 h/day for 24 h, 7 d or 30 d, uptime %. For graphs over time use Prometheus + Grafana (section 5b). |
 
 > **Scripts are remote code execution** on every device they run on. Only add scripts you trust, keep the server private, and use tags + staged rollouts.
 
@@ -100,6 +102,8 @@ Click any device for its own page:
 - **Overview**: operating system and build, model, CPU, memory, system disk, GPU, IP addresses, time zone, uptime, agent version, whether the agent runs elevated, and whether it is a VM. Memory and disk bars turn amber or red on *free space*, not just percentage, so a 4 TB disk at 92% is not an alarm.
 - **Software**: every catalog app on that device with its installed and available version, and per-app **Update / Hold / Uninstall**.
 - **Activity**: that device's jobs.
+- **Record** (like NetBox): status (active, planned, staged, maintenance, decommissioning, retired), role, site, location, owner, asset tag, purchase and warranty dates, description, and any **custom fields** you like. Next to it, what the agent detected: serial number, model, full Windows version with patch level (`10.0.26200.9457 (25H2)`), edition and the newest installed update. The Devices list filters by site and status, and search covers role, owner, asset tag and serial.
+- **Windows Update** (on Overview, Windows devices): updates waiting on that machine (the agent checks every 6 hours), with *Install all*, *Security only*, per-update *Install*, and *Check now*.
 - **Settings**: name, tags, notes (rack, owner, purpose), and a **maintenance window**.
 
 **Maintenance window:** a daily time range (it may cross midnight, e.g. 22:00 to 05:00, in server time). Automatic work (scheduled updates and auto-sync) waits for the window; jobs you start by hand always run immediately.
@@ -133,6 +137,23 @@ There is no federation or cross-server dashboard yet. If you need one view over 
 - **Update agents:** re-run the installer (`irm … | iex`, or replace `openite.exe`) and restart the service. Agents and server stay compatible across 0.3.x.
 - **Time:** scheduled updates use the **server's local time**; set `TZ` (Docker) or the system clock accordingly.
 - **Ports:** only the server port (default 8080, or 443 behind your proxy) needs to be reachable from devices.
+
+## 5b. Logs and monitoring
+
+**Console logs.** The server prints one line per event, readable in `docker logs openite` or `journalctl`:
+```
+2026-10-02 23:21:14 INFO    nas-01 is back online  kind=device.online account=1 device=2
+2026-10-02 23:25:40 ERROR   Install Git failed on desk-01  kind=job.failed account=1 device=1
+```
+| Variable | Values |
+|---|---|
+| `OPENITE_LOG_LEVEL` | `info` (default), `debug` (every request), `warning` (problems only) |
+| `OPENITE_LOG_FORMAT` | `text` (default) or `json`, one object per line for Loki, Elasticsearch or Graylog |
+
+**Prometheus and Grafana.** In *Settings → Monitoring* create a metrics token (administrator only; shown once). Prometheus scrapes `GET /metrics` with `Authorization: Bearer <token>`. Series (labels `device`, `id`, `os`, `site`, `role`):
+`openite_device_up`, `openite_device_last_seen_seconds`, `openite_device_package_updates`, `openite_device_packages_installed`, `openite_device_windows_updates_pending`, `openite_device_disk_free_gigabytes`, `openite_device_memory_used_ratio`, `openite_device_uptime_seconds`, `openite_device_info` (version, agent, status) and `openite_jobs{status}`.
+
+A ready setup lives in [`deploy/monitoring`](../deploy/monitoring): put the token in `deploy/monitoring/openite-token`, then `docker compose up -d` there and open Grafana on port 3000. The **Openite fleet** dashboard (reachability timeline, offline count, updates waiting, free disk, memory, inventory table, filters by site and role) is installed automatically.
 
 ## 6. Troubleshooting
 

@@ -27,7 +27,7 @@ var longPolled atomic.Bool
 // pollInterval is the server-provided seconds between polls (0 = use the --interval flag).
 var pollInterval atomic.Int64
 
-var version = "0.7.1" // overridden at release time: -ldflags "-X main.version=..."
+var version = "0.8.0" // overridden at release time: -ldflags "-X main.version=..."
 
 type Config struct {
 	Server   string `json:"server"`
@@ -48,6 +48,7 @@ type Step struct {
 	Version string `json:"version"` // install/upgrade this exact version (empty = latest)
 	// Aliases are the display names the app has in "installed programs"; used for headless uninstall.
 	Aliases []string `json:"aliases"`
+	Args    []string `json:"args,omitempty"` // setup steps: KB numbers for "install specific updates"
 }
 
 type Job struct {
@@ -183,7 +184,7 @@ func executeJob(job Job, b Backend, hk jobHooks) string {
 	for n, s := range job.Steps {
 		label := map[string]string{"install": "install " + s.App, "uninstall": "uninstall " + s.App,
 			"upgrade": "upgrade " + s.App, "script": "script " + s.Name, "skip": "skip " + s.App,
-			"pin": "hold " + s.App, "unpin": "release hold on " + s.App}[s.Type]
+			"pin": "hold " + s.App, "unpin": "release hold on " + s.App, "setup": s.App}[s.Type]
 		if s.Version != "" && (s.Type == "install" || s.Type == "upgrade") {
 			label += " (version " + s.Version + ")"
 		}
@@ -202,6 +203,9 @@ func executeJob(job Job, b Backend, hk jobHooks) string {
 		good := true
 		if s.Type == "script" {
 			code, out = runScript(s, hk.Line)
+			good = code == 0
+		} else if s.Type == "setup" {
+			code, out = runSetup(s, hk.Line)
 			good = code == 0
 		} else {
 			pkg := s.Pkg
@@ -252,10 +256,17 @@ func executeJob(job Job, b Backend, hk jobHooks) string {
 		}
 		if good {
 			hk.line("-> ok")
-			hk.step(n, "done", "")
+			hint := ""
+			if strings.Contains(out, "RESTART-NEEDED") {
+				hint = "Restart the PC to finish"
+			}
+			hk.step(n, "done", hint)
 		} else {
 			hk.line(fmt.Sprintf("-> FAILED (exit %d)", code))
 			hint := explainFailure(code, out)
+			if i := strings.LastIndex(out, "error: "); s.Type == "setup" && i >= 0 { // the action says what went wrong in plain words
+				hint = strings.TrimSpace(strings.SplitN(out[i+7:], "\n", 2)[0])
+			}
 			if hint != "" {
 				hk.line("hint: " + hint)
 			}
