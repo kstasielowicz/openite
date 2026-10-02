@@ -261,7 +261,9 @@ func (u *localUI) device() map[string]any {
 		_, held := u.inv.Pinned[id]
 		pkgs = append(pkgs, map[string]any{"id": id, "name": name, "version": v, "available": u.inv.Upgradable[id], "held": held, "key": key})
 	}
-	sort.Slice(pkgs, func(i, j int) bool { return strings.ToLower(pkgs[i]["name"].(string)) < strings.ToLower(pkgs[j]["name"].(string)) })
+	sort.Slice(pkgs, func(i, j int) bool {
+		return strings.ToLower(pkgs[i]["name"].(string)) < strings.ToLower(pkgs[j]["name"].(string))
+	})
 	sys := u.sys
 	if sys.BootUnix > 0 {
 		sys.UptimeSec = time.Now().Unix() - sys.BootUnix
